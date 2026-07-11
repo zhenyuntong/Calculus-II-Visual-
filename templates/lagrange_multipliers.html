@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}Lagrange Multipliers{% endblock %}
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
+.layout{display:grid;grid-template-columns:260px 1fr;gap:10px;flex:1;min-height:0;}
+.right-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
+.canvas-wrap{flex:1;min-height:390px;position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r);}
+#plot-3d,#plot-top{width:100%;height:100%;display:block;border-radius:var(--r);}
+.toggle-stack{display:flex;flex-direction:column;gap:7px;}
+.info-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.mini-stat{border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;background:var(--surface);}
+.mini-stat span{display:block;font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);}
+.mini-stat strong{display:block;font-family:'JetBrains Mono',monospace;font-size:.84rem;color:var(--text-2);margin-top:2px;}
+.formula-mini{border:1px solid var(--border);background:var(--surface);border-radius:var(--r);padding:9px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.formula-mini .tag{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);}
+.formula-mini .math{color:var(--text-2);}
+@media(max-width:860px){.layout{grid-template-columns:1fr;}.info-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+</style>
+{% endblock %}
+
+{% block body %}
+<a class="back-link" href="/">← Menu</a>
+<header>
+  <h1>Lagrange Multipliers</h1>
+  <div class="formula-strip">
+    <div class="formula-card"><span id="hdr-lag"></span></div>
+    <div class="formula-card"><span id="hdr-con"></span></div>
+  </div>
+</header>
+<details class="explain">
+  <summary><span class="ex-tag">LEARN</span>&nbsp; Lagrange Multipliers — why gradients line up <span class="ex-chev">▶</span></summary>
+  <div class="explain-body">
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--red)">The condition</div>
+      <p class="ex-text">On the constraint curve, you are only allowed to move in tangent directions. At a constrained max or min, moving along any allowed tangent direction should not change f to first order. That means ∇f is perpendicular to the constraint tangent. Since ∇g is also perpendicular to the constraint tangent, the two gradients must be parallel.</p>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--blue)">What λ means</div>
+      <div class="ex-fbox"><span id="learn-lambda"></span><br>λ tells how much the optimal value of f changes when the constraint value c is relaxed a little.</div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--accent)">How to read the views</div>
+      <div class="ex-tip">3D shows z=f(x,y) as the objective surface, with the constraint lifted onto it. Top-down shows the contour map: the optimum happens where a blue f-contour just kisses the red constraint curve.</div>
+    </div>
+  </div>
+</details>
+<div class="layout">
+  <div class="panel">
+    <div class="sec-label">Objective f(x,y) =</div>
+    <div class="field">
+      <input type="text" id="inp-f" value="x^2 + y^2" autocomplete="off" spellcheck="false">
+      <div class="sym-bar" data-target="inp-f">
+        <button class="sym" data-ins="x^2">x²</button><button class="sym" data-ins="y^2">y²</button>
+        <button class="sym" data-ins="x*y">xy</button><button class="sym" data-ins="sin(x)">sin</button>
+        <button class="sym" data-ins="cos(y)">cos</button><button class="sym" data-ins="exp(x)">eˣ</button>
+      </div>
+    </div>
+    <div class="sec-label">Constraint g(x,y) =</div>
+    <div class="field"><input type="text" id="inp-g" value="x + y" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label>c (g = c)</label><input type="number" id="inp-c" value="1" step="0.5"></div>
+    <div class="err-msg" id="err"></div>
+    <button class="apply-btn" id="btn-apply">Apply ↵</button>
+    <hr>
+    <div class="sec-label">Display checklist</div>
+    <div class="toggle-stack">
+      <div class="toggle-row"><label class="toggle-label">3D objective surface</label><input type="checkbox" id="chk-surface" checked></div>
+      <div class="toggle-row"><label class="toggle-label">Objective level curves</label><input type="checkbox" id="chk-levels" checked></div>
+      <div class="toggle-row"><label class="toggle-label">Constraint g=c</label><input type="checkbox" id="chk-constraint" checked></div>
+      <div class="toggle-row"><label class="toggle-label">Gradient field ∇f</label><input type="checkbox" id="chk-gf" checked></div>
+      <div class="toggle-row"><label class="toggle-label">Gradient field ∇g</label><input type="checkbox" id="chk-gg" checked></div>
+      <div class="toggle-row"><label class="toggle-label">Solutions + λ labels</label><input type="checkbox" id="chk-sol" checked></div>
+      <div class="toggle-row"><label class="toggle-label">Touching contour at solutions</label><input type="checkbox" id="chk-touch" checked></div>
+    </div>
+    <hr>
+    <div class="sec-label">Presets</div>
+    <button class="preset-btn" data-f="x^2 + y^2" data-g="x + y" data-c="1"><span class="preset-main">min x²+y² s.t. x+y=1</span><span class="preset-sub">Circle levels, linear constraint</span></button>
+    <button class="preset-btn" data-f="x*y" data-g="x + y" data-c="4"><span class="preset-main">max xy s.t. x+y=4</span><span class="preset-sub">AM-GM: max at x=y=2</span></button>
+    <button class="preset-btn" data-f="x^2 + y^2" data-g="x^2/4 + y^2" data-c="1"><span class="preset-main">min x²+y² on ellipse</span><span class="preset-sub">Nearest point to origin</span></button>
+    <button class="preset-btn" data-f="x^2 - y^2" data-g="x^2 + y^2" data-c="1"><span class="preset-main">extrema of x²-y² on circle</span><span class="preset-sub">Hyperbolic objective</span></button>
+    <button class="preset-btn" data-f="3*x + 2*y" data-g="x^2 + y^2" data-c="1"><span class="preset-main">max 3x+2y on unit circle</span><span class="preset-sub">Linear on circle</span></button>
+  </div>
+  <div class="right-col">
+    <div class="ctrl-row">
+      <button class="ctrl-btn active" data-view="3d">Default 3D view</button>
+      <button class="ctrl-btn" data-view="top">Top-down view</button>
+      <span style="flex:1"></span><span class="method-lbl">Blue: ∇f · Green: ∇g · Red: constraint</span>
+    </div>
+    <div class="formula-mini"><span class="tag">Current setup</span><span class="math" id="live-f"></span><span class="math" id="live-g"></span></div>
+    <div class="canvas-wrap" id="cwrap"><canvas id="plot-3d"></canvas><canvas id="plot-top" style="display:none"></canvas></div>
+    <div class="info-grid">
+      <div class="mini-stat"><span>Best min candidate</span><strong id="stat-min">—</strong></div>
+      <div class="mini-stat"><span>Best max candidate</span><strong id="stat-max">—</strong></div>
+      <div class="mini-stat"><span>Best alignment</span><strong id="stat-align">—</strong></div>
+      <div class="mini-stat"><span>Visible solutions</span><strong id="stat-count">—</strong></div>
+    </div>
+    <div class="panel" id="sol-panel" style="padding:12px 16px;"><div class="sec-label">Solutions found</div><div id="sol-list" style="display:flex;gap:10px;flex-wrap:wrap;"></div></div>
+  </div>
+</div>
+<div class="steps-panel"><div class="steps-head"><span class="steps-tag">SYMBOLIC STEPS</span><span class="steps-title">Lagrange Multipliers — SymPy step by step</span><span class="steps-loading" id="steps-loading"></span></div><div class="steps-list" id="steps-list"></div></div>
+
+<script>
+const rk=(el,tex)=>el&&katex.render(tex,el,{throwOnError:false,displayMode:false});
+rk(document.getElementById('hdr-lag'),String.raw`\nabla f = \lambda\,\nabla g`);rk(document.getElementById('hdr-con'),String.raw`g(x,y)=c`);rk(document.getElementById('learn-lambda'),String.raw`\nabla f=\lambda\nabla g`);
+document.querySelectorAll('.sym-bar').forEach(bar=>{const tid=bar.dataset.target;bar.querySelectorAll('.sym').forEach(btn=>btn.addEventListener('mousedown',e=>{e.preventDefault();const inp=document.getElementById(tid);inp.focus();const s=inp.selectionStart,end=inp.selectionEnd,ins=btn.dataset.ins;inp.value=inp.value.slice(0,s)+ins+inp.value.slice(end);inp.selectionStart=inp.selectionEnd=s+ins.length;}));});
+const H=1e-4,DPR=window.devicePixelRatio||1,RANGE=3.5;let fC=null,gC=null,cVal=1,solutions=[],currentView='3d';let renderer,scene,camera,surfaceGroup,lineGroup,arrowGroup,solGroup,camState={theta:.78,phi:1.05,r:8};
+function sf(fn,x,y){try{const v=fn({x,y});return isFinite(v)?v:NaN;}catch{return NaN;}}
+function grad(fn,x,y){return{fx:(sf(fn,x+H,y)-sf(fn,x-H,y))/(2*H),fy:(sf(fn,x,y+H)-sf(fn,x,y-H))/(2*H)};}
+function texExpr(raw){return window.mathToLatex?window.mathToLatex(raw):raw.replace(/\*/g,'\\cdot ');}
+function clearGroup(g){while(g.children.length){const o=g.children.pop();if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose();}}
+function findSolutions(){solutions=[];const N=120,step=2*RANGE/N,gvs=[];for(let i=0;i<=N;i++){gvs.push([]);for(let j=0;j<=N;j++){const x=-RANGE+i*step,y=-RANGE+j*step;gvs[i].push(sf(gC,x,y)-cVal);}}const crossed=[];for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(gvs[i][j]*gvs[i+1][j]<0||gvs[i][j]*gvs[i][j+1]<0)crossed.push([-RANGE+(i+.5)*step,-RANGE+(j+.5)*step]);crossed.forEach(([cx,cy])=>{let x=cx,y=cy;for(let k=0;k<80;k++){const gv=sf(gC,x,y)-cVal,{fx:gx,fy:gy}=grad(gC,x,y),gm=gx*gx+gy*gy;if(gm<1e-12)break;x-=gv*gx/gm;y-=gv*gy/gm;}const F=grad(fC,x,y),G=grad(gC,x,y),cross=F.fx*G.fy-F.fy*G.fx,dot=F.fx*G.fx+F.fy*G.fy,gm=G.fx*G.fx+G.fy*G.fy,ang=Math.atan2(Math.abs(cross),Math.abs(dot))*180/Math.PI;if(Math.abs(cross)<.08&&Math.abs(sf(gC,x,y)-cVal)<.05){const fv=sf(fC,x,y);if(!isFinite(fv)||solutions.some(s=>Math.hypot(s.x-x,s.y-y)<.15))return;solutions.push({x,y,f:fv,lambda:gm>1e-10?dot/gm:NaN,angle:ang});}});solutions.sort((a,b)=>a.f-b.f);}
+function stats(){let mn=Infinity,mx=-Infinity;for(let i=0;i<=60;i++)for(let j=0;j<=60;j++){const x=-RANGE+2*RANGE*i/60,y=-RANGE+2*RANGE*j/60,v=sf(fC,x,y);if(isFinite(v)){mn=Math.min(mn,v);mx=Math.max(mx,v);}}const mid=(mn+mx)/2,span=Math.max(1e-6,mx-mn);return{mn,mx,norm:v=>(v-mid)/span*3};}
+function contourSegments(fn,level,N=86,range=RANGE){const segs=[],step=2*range/N;for(let i=0;i<N;i++)for(let j=0;j<N;j++){const x0=-range+i*step,y0=-range+j*step,x1=x0+step,y1=y0+step,c=[[x0,y0,sf(fn,x0,y0)-level],[x1,y0,sf(fn,x1,y0)-level],[x1,y1,sf(fn,x1,y1)-level],[x0,y1,sf(fn,x0,y1)-level]],pts=[];[[0,1],[1,2],[2,3],[3,0]].forEach(([a,b])=>{const A=c[a],B=c[b];if(!isFinite(A[2])||!isFinite(B[2]))return;if(A[2]===0||A[2]*B[2]<0){const t=A[2]/(A[2]-B[2]);pts.push([A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t]);}});if(pts.length===2)segs.push(pts);}return segs;}
+function initThree(){const wrap=document.getElementById('cwrap'),c=document.getElementById('plot-3d');renderer=new THREE.WebGLRenderer({canvas:c,antialias:true,alpha:true});renderer.setPixelRatio(DPR);renderer.setSize(wrap.clientWidth,wrap.clientHeight);scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(45,wrap.clientWidth/wrap.clientHeight,.01,100);scene.add(new THREE.AmbientLight(0xffffff,.72));const dir=new THREE.DirectionalLight(0xffffff,.85);dir.position.set(6,8,4);scene.add(dir);surfaceGroup=new THREE.Group();lineGroup=new THREE.Group();arrowGroup=new THREE.Group();solGroup=new THREE.Group();scene.add(surfaceGroup,lineGroup,arrowGroup,solGroup);scene.add(new THREE.AxesHelper(3.2));function cam(){camera.position.set(camState.r*Math.sin(camState.phi)*Math.sin(camState.theta),camState.r*Math.cos(camState.phi),camState.r*Math.sin(camState.phi)*Math.cos(camState.theta));camera.lookAt(0,0,0);}cam();let down=false,lx=0,ly=0;c.addEventListener('mousedown',e=>{down=true;lx=e.clientX;ly=e.clientY;});window.addEventListener('mouseup',()=>down=false);c.addEventListener('mousemove',e=>{if(!down)return;const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;camState.theta-=dx*.01;camState.phi=Math.max(.12,Math.min(Math.PI-.12,camState.phi+dy*.01));cam();});c.addEventListener('wheel',e=>{camState.r=Math.max(3,Math.min(16,camState.r+e.deltaY*.012));cam();e.preventDefault();},{passive:false});(function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);})();}
+function addLine(group,pts,color,opacity=.9){group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(...p))),new THREE.LineBasicMaterial({color,transparent:true,opacity})));}
+function build3D(){clearGroup(surfaceGroup);clearGroup(lineGroup);clearGroup(arrowGroup);clearGroup(solGroup);const st=stats();if(document.getElementById('chk-surface').checked){const N=54,verts=[],cols=[];for(let i=0;i<N;i++)for(let j=0;j<N;j++){const x0=-RANGE+2*RANGE*i/N,y0=-RANGE+2*RANGE*j/N,x1=-RANGE+2*RANGE*(i+1)/N,y1=-RANGE+2*RANGE*(j+1)/N,q=[[x0,st.norm(sf(fC,x0,y0)),y0],[x1,st.norm(sf(fC,x1,y0)),y0],[x0,st.norm(sf(fC,x0,y1)),y1],[x1,st.norm(sf(fC,x1,y1)),y1]];[[0,1,2],[1,3,2]].forEach(tr=>tr.forEach(idx=>{const p=q[idx];verts.push(...p);const t=(p[1]+1.5)/3;cols.push(.18+.25*t,.42+.25*t,.92-.12*t);}));}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));geo.computeVertexNormals();surfaceGroup.add(new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide,transparent:true,opacity:.9})));}if(document.getElementById('chk-levels').checked){for(let l=1;l<10;l++){const lev=st.mn+(st.mx-st.mn)*l/10;contourSegments(fC,lev,70).forEach(seg=>addLine(lineGroup,seg.map(([x,y])=>[x,st.norm(lev)+.025,y]),0x3b82f6,.35));}}if(document.getElementById('chk-touch').checked)solutions.slice(0,3).forEach(s=>contourSegments(fC,s.f,70).forEach(seg=>addLine(lineGroup,seg.map(([x,y])=>[x,st.norm(s.f)+.055,y]),0xf59e0b,.75)));if(document.getElementById('chk-constraint').checked)contourSegments(gC,cVal,100).forEach(seg=>addLine(lineGroup,seg.map(([x,y])=>[x,st.norm(sf(fC,x,y))+.08,y]),0xef4444,.95));if(document.getElementById('chk-gf').checked||document.getElementById('chk-gg').checked){for(let x=-RANGE+.7;x<RANGE;x+=1.05)for(let y=-RANGE+.7;y<RANGE;y+=1.05){const z=sf(fC,x,y);if(!isFinite(z))continue;[['chk-gf',fC,0x3b82f6],['chk-gg',gC,0x10a37f]].forEach(([id,fn,col])=>{if(!document.getElementById(id).checked)return;const gr=grad(fn,x,y),m=Math.hypot(gr.fx,gr.fy);if(!isFinite(m)||m<1e-6)return;arrowGroup.add(new THREE.ArrowHelper(new THREE.Vector3(gr.fx/m,0,gr.fy/m),new THREE.Vector3(x,st.norm(z)+.18,y),Math.min(m,3)*.22,col,.12,.08));});}}if(document.getElementById('chk-sol').checked)solutions.forEach(s=>{const mesh=new THREE.Mesh(new THREE.SphereGeometry(.105,16,16),new THREE.MeshLambertMaterial({color:0xf59e0b}));mesh.position.set(s.x,st.norm(s.f)+.2,s.y);solGroup.add(mesh);});}
+function drawArrow(ctx,x1,y1,x2,y2,color){const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);if(len<2)return;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=1.2*DPR;ctx.stroke();const a=Math.atan2(dy,dx),hs=5*DPR;ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-hs*Math.cos(a-.4),y2-hs*Math.sin(a-.4));ctx.lineTo(x2-hs*Math.cos(a+.4),y2-hs*Math.sin(a+.4));ctx.closePath();ctx.fillStyle=color;ctx.fill();}
+function drawTop(){const wrap=document.getElementById('cwrap'),canvas=document.getElementById('plot-top'),cw=wrap.clientWidth,ch=wrap.clientHeight;canvas.width=cw*DPR;canvas.height=ch*DPR;canvas.style.width=cw+'px';canvas.style.height=ch+'px';const ctx=canvas.getContext('2d'),W=canvas.width,Hc=canvas.height,pad=Math.round(50*DPR),ppx=x=>pad+(x+RANGE)/(2*RANGE)*(W-2*pad),ppy=y=>Hc-pad-(y+RANGE)/(2*RANGE)*(Hc-2*pad);ctx.fillStyle='#fff';ctx.fillRect(0,0,W,Hc);ctx.strokeStyle='#f1f5f9';ctx.lineWidth=1;for(let i=-3;i<=3;i++){ctx.beginPath();ctx.moveTo(ppx(i),pad);ctx.lineTo(ppx(i),Hc-pad);ctx.stroke();ctx.beginPath();ctx.moveTo(pad,ppy(i));ctx.lineTo(W-pad,ppy(i));ctx.stroke();}ctx.strokeStyle='#d1d5db';ctx.beginPath();ctx.moveTo(ppx(0),pad);ctx.lineTo(ppx(0),Hc-pad);ctx.stroke();ctx.beginPath();ctx.moveTo(pad,ppy(0));ctx.lineTo(W-pad,ppy(0));ctx.stroke();const st=stats();if(document.getElementById('chk-levels').checked){for(let l=1;l<11;l++){const lev=st.mn+(st.mx-st.mn)*l/11;contourSegments(fC,lev,96).forEach(seg=>{ctx.beginPath();ctx.moveTo(ppx(seg[0][0]),ppy(seg[0][1]));ctx.lineTo(ppx(seg[1][0]),ppy(seg[1][1]));ctx.strokeStyle='rgba(59,130,246,.25)';ctx.lineWidth=1;ctx.stroke();});}}if(document.getElementById('chk-touch').checked)solutions.slice(0,3).forEach(s=>contourSegments(fC,s.f,96).forEach(seg=>{ctx.beginPath();ctx.moveTo(ppx(seg[0][0]),ppy(seg[0][1]));ctx.lineTo(ppx(seg[1][0]),ppy(seg[1][1]));ctx.strokeStyle='rgba(217,119,6,.7)';ctx.lineWidth=1.6*DPR;ctx.stroke();}));if(document.getElementById('chk-constraint').checked)contourSegments(gC,cVal,120).forEach(seg=>{ctx.beginPath();ctx.moveTo(ppx(seg[0][0]),ppy(seg[0][1]));ctx.lineTo(ppx(seg[1][0]),ppy(seg[1][1]));ctx.strokeStyle='#ef4444';ctx.lineWidth=2.1*DPR;ctx.stroke();});const as=.25;[['chk-gf',fC,'rgba(59,130,246,.65)'],['chk-gg',gC,'rgba(16,163,127,.55)']].forEach(([id,fn,col])=>{if(!document.getElementById(id).checked)return;for(let x=-RANGE+.6;x<RANGE;x+=.75)for(let y=-RANGE+.6;y<RANGE;y+=.75){const gr=grad(fn,x,y),m=Math.hypot(gr.fx,gr.fy);if(!isFinite(m)||m<1e-6)return;const s=Math.min(m,4)*as/m;drawArrow(ctx,ppx(x),ppy(y),ppx(x+gr.fx*s),ppy(y+gr.fy*s),col);}});if(document.getElementById('chk-sol').checked)solutions.forEach((s,k)=>{ctx.beginPath();ctx.arc(ppx(s.x),ppy(s.y),7*DPR,0,2*Math.PI);ctx.fillStyle='#f59e0b';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2*DPR;ctx.stroke();ctx.fillStyle='#6b7280';ctx.font=`${Math.round(10*DPR)}px system-ui`;ctx.fillText(`λ=${isFinite(s.lambda)?s.lambda.toFixed(2):'?'}`,ppx(s.x)+10*DPR,ppy(s.y)-10*DPR);});ctx.fillStyle='#9ca3af';ctx.font=`${Math.round(10*DPR)}px system-ui`;ctx.textAlign='center';for(let i=-3;i<=3;i++){ctx.fillText(i,ppx(i),Hc-pad+16*DPR);ctx.textAlign='right';ctx.fillText(i,pad-6,ppy(i)+4);ctx.textAlign='center';}}
+function draw(){if(!fC||!gC)return;if(currentView==='3d')build3D();else drawTop();updateStats();}
+function renderSolutions(){const list=document.getElementById('sol-list');list.innerHTML='';if(!solutions.length){list.innerHTML='<span style="color:var(--text-3);font-size:0.8rem">No solutions found in the visible range</span>';return;}solutions.forEach(s=>{const chip=document.createElement('div');chip.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);';chip.innerHTML=`<div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0"></div><span style="font-family:monospace;font-size:0.82rem">x=${s.x.toFixed(4)}, y=${s.y.toFixed(4)}, <b>f=${s.f.toFixed(4)}</b>, λ=${isFinite(s.lambda)?s.lambda.toFixed(3):'?'}</span>`;list.appendChild(chip);});}
+function updateStats(){document.getElementById('stat-count').textContent=String(solutions.length);document.getElementById('stat-min').textContent=solutions[0]?`f=${solutions[0].f.toFixed(4)}`:'—';document.getElementById('stat-max').textContent=solutions.at(-1)?`f=${solutions.at(-1).f.toFixed(4)}`:'—';const best=solutions.reduce((a,s)=>!a||s.angle<a.angle?s:a,null);document.getElementById('stat-align').textContent=best?`${best.angle.toFixed(2)}° apart`:'—';}
+function renderSteps(steps){const list=document.getElementById('steps-list');list.innerHTML='';steps.forEach((step,i)=>{const div=document.createElement('div');div.className='step-item';div.innerHTML=`<div class="step-num" style="color:${step.color};border-color:${step.color}44">${i+1}</div><div class="step-body"><div class="step-katex"></div><div class="step-desc">${step.desc}</div></div><div class="step-val" style="color:${step.color}">${step.val||''}</div>`;try{katex.render(step.latex,div.querySelector('.step-katex'),{throwOnError:false,displayMode:false});}catch(e){}list.appendChild(div);});}
+async function fetchSteps(){const loading=document.getElementById('steps-loading');loading.textContent='Computing…';const fRaw=document.getElementById('inp-f').value.trim(),gRaw=document.getElementById('inp-g').value.trim();try{const res=await fetch('/api/lagrange',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({f:fRaw.replace(/\^/g,'**'),g:gRaw.replace(/\^/g,'**'),c:cVal})});const data=await res.json();renderSteps(data.steps);loading.textContent='';}catch(e){loading.textContent='(steps unavailable)';}}
+function applyFn(){const fRaw=document.getElementById('inp-f').value.trim(),gRaw=document.getElementById('inp-g').value.trim();cVal=parseFloat(document.getElementById('inp-c').value)||1;const errEl=document.getElementById('err');errEl.textContent='';let fc,gc;try{fc=math.compile(fRaw);fc.evaluate({x:1,y:1});}catch(e){errEl.textContent='f: '+e.message;return;}try{gc=math.compile(gRaw);gc.evaluate({x:1,y:1});}catch(e){errEl.textContent='g: '+e.message;return;}fC=scope=>fc.evaluate(scope);gC=scope=>gc.evaluate(scope);rk(document.getElementById('live-f'),String.raw`f(x,y)=`+texExpr(fRaw));rk(document.getElementById('live-g'),String.raw`g(x,y)=`+texExpr(gRaw)+String.raw`=${cVal}`);findSolutions();draw();renderSolutions();fetchSteps();}
+document.getElementById('btn-apply').addEventListener('click',applyFn);document.getElementById('inp-f').addEventListener('keydown',e=>{if(e.key==='Enter')applyFn();});document.getElementById('inp-g').addEventListener('keydown',e=>{if(e.key==='Enter')applyFn();});document.querySelectorAll('.preset-btn').forEach(btn=>btn.addEventListener('click',()=>{document.getElementById('inp-f').value=btn.dataset.f;document.getElementById('inp-g').value=btn.dataset.g;document.getElementById('inp-c').value=btn.dataset.c;applyFn();}));document.querySelectorAll('[data-view]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-view]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentView=btn.dataset.view;document.getElementById('plot-3d').style.display=currentView==='3d'?'block':'none';document.getElementById('plot-top').style.display=currentView==='top'?'block':'none';draw();}));['chk-surface','chk-levels','chk-constraint','chk-gf','chk-gg','chk-sol','chk-touch'].forEach(id=>document.getElementById(id).addEventListener('change',draw));const ro=new ResizeObserver(()=>{if(renderer){const wrap=document.getElementById('cwrap');renderer.setSize(wrap.clientWidth,wrap.clientHeight);camera.aspect=wrap.clientWidth/wrap.clientHeight;camera.updateProjectionMatrix();}if(fC)draw();});ro.observe(document.getElementById('cwrap'));initThree();applyFn();
+</script>
+{% endblock %}

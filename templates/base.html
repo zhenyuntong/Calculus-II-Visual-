@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f4ef">
+<title>{% block title %}Math Visualizer{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+
+<!-- Zoom controls -->
+<div class="zoom-fab">
+  <button class="zoom-btn" id="zoom-in"  title="Zoom in (⌘+)">+</button>
+  <div class="zoom-level" id="zoom-level">100%</div>
+  <button class="zoom-btn" id="zoom-out" title="Zoom out (⌘-)">−</button>
+  <button class="zoom-btn" id="zoom-rst" title="Reset to 100% (⌘0)" style="font-size:0.75rem;">↺</button>
+</div>
+
+<script>
+/* ── Global: math expression → LaTeX (used by live preview + templates) ── */
+window.mathToLatex = function(s) {
+  if (!s || !s.trim()) return '';
+  return s.trim()
+    .replace(/\*\*/g, '^')
+    .replace(/sqrt\(([^)]+)\)/g,  '\\sqrt{$1}')
+    .replace(/abs\(([^)]+)\)/g,   '\\left|$1\\right|')
+    .replace(/exp\(([^()]+)\)/g,  'e^{$1}')
+    .replace(/\bsin\b/g,  '\\sin').replace(/\bcos\b/g,  '\\cos')
+    .replace(/\btan\b/g,  '\\tan').replace(/\bln\b/g,   '\\ln')
+    .replace(/\blog\b/g,  '\\log').replace(/\bpi\b/gi,  '\\pi')
+    .replace(/\binf\b/gi, '\\infty')
+    .replace(/\*/g, ' \\cdot ');
+};
+
+/* ── Page zoom (persisted, Cmd+/Cmd−/Cmd0) ───────────────────────────────── */
+(function () {
+  const STEP = 0.1, MIN = 0.4, MAX = 2.5;
+  let z = parseFloat(localStorage.getItem('mathZoom') || '1');
+  const lvl = document.getElementById('zoom-level');
+
+  function applyZoom(v) {
+    z = Math.max(MIN, Math.min(MAX, Math.round(v * 10) / 10));
+    document.body.style.zoom = z;
+    lvl.textContent = Math.round(z * 100) + '%';
+    localStorage.setItem('mathZoom', z);
+  }
+
+  document.getElementById('zoom-in') .addEventListener('click', () => applyZoom(z + STEP));
+  document.getElementById('zoom-out').addEventListener('click', () => applyZoom(z - STEP));
+  document.getElementById('zoom-rst').addEventListener('click', () => applyZoom(1));   // reset to 100%
+
+  window.addEventListener('keydown', e => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if      (e.key === '=' || e.key === '+') { e.preventDefault(); applyZoom(z + STEP); }
+    else if (e.key === '-')                  { e.preventDefault(); applyZoom(z - STEP); }
+    else if (e.key === '0')                  { e.preventDefault(); applyZoom(1); }
+  });
+
+  applyZoom(z);
+})();
+
+/* ── Dockable resizable panel ────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  const PANEL_MIN  = 160;
+  const PANEL_MAX  = () => Math.round(window.innerWidth * 0.55);
+  const COLLAPSED_W = 44;
+
+  document.querySelectorAll('.layout').forEach(layout => {
+    const panel = layout.querySelector('.panel');
+    if (!panel) return;
+
+    /* ── Inject drag handle ── */
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    const dots = document.createElement('div');
+    dots.className = 'resize-dots';
+    dots.appendChild(document.createElement('span'));
+    handle.appendChild(dots);
+    panel.after(handle);
+
+    /* ── Inject toolbar (dock + collapse buttons) ── */
+    const toolbar = document.createElement('div');
+    toolbar.className = 'panel-toolbar';
+
+    const toolbarTitle = document.createElement('span');
+    toolbarTitle.className = 'panel-toolbar-title';
+    toolbarTitle.textContent = 'Setup';
+    toolbar.appendChild(toolbarTitle);
+
+    const dockBtn = document.createElement('button');
+    dockBtn.className = 'panel-dock-btn';
+    dockBtn.innerHTML = '<span aria-hidden="true">⇄</span><span>Move</span>';
+    dockBtn.title = 'Move panel to other side';
+    dockBtn.setAttribute('aria-label', 'Move setup panel to the other side');
+    toolbar.appendChild(dockBtn);
+
+    panel.insertBefore(toolbar, panel.firstChild);
+
+    /* ── Inject collapse button ── */
+    const colBtn = document.createElement('button');
+    colBtn.className = 'panel-collapse-btn';
+    colBtn.setAttribute('aria-label', 'Collapse setup panel');
+    panel.appendChild(colBtn);
+
+    /* ── Persisted state ── */
+    const pageKey  = location.pathname;
+    const savedW   = parseFloat(localStorage.getItem('panelW-'    + pageKey)) || panel.offsetWidth || 260;
+    let currentW   = savedW;
+    let collapsed  = localStorage.getItem('panelC-'    + pageKey) === '1';
+    let dockRight  = localStorage.getItem('panelDock-' + pageKey) === '1';
+
+    /* ── applyWidth: set grid columns respecting dock side ── */
+    function applyWidth(w, save) {
+      currentW = Math.max(PANEL_MIN, Math.min(PANEL_MAX(), w));
+      layout.style.gridTemplateColumns = dockRight
+        ? `1fr 8px ${currentW}px`
+        : `${currentW}px 8px 1fr`;
+      if (save) localStorage.setItem('panelW-' + pageKey, currentW);
+      /* red tint at limits */
+      const atLimit = currentW <= PANEL_MIN || currentW >= PANEL_MAX();
+      handle.style.background = atLimit ? 'rgba(239,68,68,0.15)' : '';
+    }
+
+    /* ── updateColBtn: arrow direction respects dock + collapsed state ── */
+    function updateColBtn() {
+      /* When on left:  open=‹ (click to close left), closed=› (click to open right)
+         When on right: open=› (click to close right), closed=‹ (click to open left) */
+      colBtn.textContent = collapsed
+        ? (dockRight ? '‹' : '›')
+        : (dockRight ? '›' : '‹');
+      colBtn.title = collapsed ? 'Expand panel' : 'Collapse panel';
+      colBtn.setAttribute('aria-label', colBtn.title);
+    }
+
+    /* ── setCollapsed ── */
+    function setCollapsed(v) {
+      collapsed = v;
+      handle.style.pointerEvents = v ? 'none' : '';
+      handle.style.opacity       = v ? '0'    : '';
+      layout.classList.toggle('panel-collapsed', v);
+      if (v) {
+        layout.style.gridTemplateColumns = dockRight
+          ? `1fr 0 ${COLLAPSED_W}px`
+          : `${COLLAPSED_W}px 0 1fr`;
+      } else {
+        applyWidth(currentW, false);
+      }
+      updateColBtn();
+      localStorage.setItem('panelC-' + pageKey, v ? '1' : '0');
+    }
+
+    /* ── setDockRight ── */
+    function setDockRight(v) {
+      dockRight = v;
+      layout.classList.toggle('dock-right', v);
+      localStorage.setItem('panelDock-' + pageKey, v ? '1' : '0');
+      updateColBtn();
+      if (collapsed) {
+        layout.style.gridTemplateColumns = dockRight
+          ? `1fr 0 ${COLLAPSED_W}px`
+          : `${COLLAPSED_W}px 0 1fr`;
+      } else {
+        applyWidth(currentW, false);
+      }
+    }
+
+    colBtn .addEventListener('click', () => setCollapsed(!collapsed));
+    dockBtn.addEventListener('click', () => setDockRight(!dockRight));
+
+    /* ── Drag to resize ── */
+    let dragging = false, startX = 0, startW2 = 0;
+
+    handle.addEventListener('mousedown', e => {
+      if (collapsed) return;
+      dragging = true; startX = e.clientX; startW2 = currentW;
+      handle.classList.add('dragging');
+      document.body.style.cursor    = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      /* Invert delta when docked right (dragging handle left = panel grows) */
+      const delta = dockRight ? (startX - e.clientX) : (e.clientX - startX);
+      applyWidth(startW2 + delta, false);
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.cursor     = '';
+      document.body.style.userSelect = '';
+      handle.style.background = '';
+      localStorage.setItem('panelW-' + pageKey, currentW);
+    });
+
+    /* ── Init ── */
+    applyWidth(savedW, false);
+    setDockRight(dockRight);
+    setCollapsed(collapsed);
+  });
+});
+
+/* ── Expression editor: readable math + editable source ─────────────────── */
+(function () {
+  function attachPreview(inp) {
+    if (inp.dataset.preview) return;
+    inp.dataset.preview = '1';
+
+    const editor = document.createElement('div');
+    editor.className = 'expression-editor';
+
+    const display = document.createElement('div');
+    display.className = 'expression-display';
+    const caption = document.createElement('span');
+    caption.className = 'expression-caption';
+    caption.textContent = 'Math preview';
+    display.appendChild(caption);
+
+    const preview = document.createElement('div');
+    preview.className = 'math-preview';
+    display.appendChild(preview);
+
+    const entry = document.createElement('div');
+    entry.className = 'expression-entry';
+    const sourceMark = document.createElement('span');
+    sourceMark.className = 'expression-source-mark';
+    sourceMark.textContent = 'fx';
+    sourceMark.setAttribute('aria-hidden', 'true');
+    const enterHint = document.createElement('kbd');
+    enterHint.textContent = 'Enter';
+    enterHint.title = 'Apply expression';
+
+    inp.before(editor);
+    editor.appendChild(display);
+    editor.appendChild(entry);
+    entry.appendChild(sourceMark);
+    entry.appendChild(inp);
+    entry.appendChild(enterHint);
+
+    const field = inp.closest('.field');
+
+    /* focus ring on preview mirrors input focus */
+    inp.addEventListener('focus', () => editor.classList.add('inp-focused'));
+    inp.addEventListener('blur',  () => editor.classList.remove('inp-focused'));
+
+    function update() {
+      const raw = inp.value.trim();
+      if (!raw) {
+        preview.innerHTML = '';
+        preview.textContent = 'Type an expression below';
+        editor.classList.add('is-empty');
+        field && field.classList.remove('has-preview');
+        return;
+      }
+      try {
+        katex.render(window.mathToLatex(raw), preview,
+          { throwOnError: false, displayMode: false });
+        field && field.classList.add('has-preview');
+        editor.classList.remove('is-empty');
+      } catch {
+        preview.textContent = raw;
+        field && field.classList.add('has-preview');
+        editor.classList.remove('is-empty');
+      }
+    }
+
+    inp.addEventListener('input', update);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const apply = inp.closest('.panel')?.querySelector('.apply-btn');
+        if (apply) { e.preventDefault(); apply.click(); }
+      }
+    });
+    update();
+  }
+
+  function scan() {
+    document.querySelectorAll('.field input[type="text"]').forEach(attachPreview);
+  }
+
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', scan);
+  else scan();
+  setTimeout(scan, 400);
+})();
+
+/* ── Shared information architecture: page intro, folded examples, guides ─ */
+document.addEventListener('DOMContentLoaded', () => {
+  const PAGE = {
+    '/riemann-sum': {
+      eyebrow: 'Accumulation · approximation',
+      deck: 'Build area from samples, then watch the approximation settle toward the exact integral.',
+      guide: '<b>Read the picture:</b> the curve is the function; the colored shapes are the chosen approximation. Increase <i>n</i> to narrow the slices and compare the error below.',
+      chips: [['#146c5a','approximation'], ['#3276b1','exact value'], ['#c47a22','error']]
+    },
+    '/substitution': {
+      eyebrow: 'Change of variables',
+      deck: 'Follow one moving strip through x-space and u-space to see why substitution preserves area.',
+      guide: '<b>Read the picture:</b> the amber marker is the same strip in two coordinate systems. The blue and green shaded regions accumulate equal signed area.',
+      chips: [['#3276b1','x-space'], ['#146c5a','u-space'], ['#c47a22','same strip']]
+    },
+    '/integration-by-parts': {
+      eyebrow: 'Product rule · reversed',
+      deck: 'See one area split into a boundary rectangle and a complementary remainder.',
+      guide: '<b>Read the picture:</b> in the u–v view, the colored regions tile the boundary rectangle. Switch to x-domain to connect those areas to the two integrals.',
+      chips: [['#146c5a','boundary'], ['#7456a6','remainder'], ['#3276b1','original']]
+    },
+    '/partial-derivatives': {
+      eyebrow: 'Local change · many variables',
+      deck: 'Probe a surface, compare axis-aligned slices, and read the gradient as the steepest uphill direction.',
+      guide: '<b>Read the picture:</b> the probe fixes the point. The tangent plane shows the local linear model; the gradient map shows direction and strength from above.',
+      chips: [['#3276b1','surface'], ['#c47a22','probe'], ['#146c5a','gradient']]
+    },
+    '/lagrange-multipliers': {
+      eyebrow: 'Constrained optimization',
+      deck: 'Find the points where an objective contour just touches the constraint and their gradients align.',
+      guide: '<b>Read the picture:</b> contours belong to the objective and the bold curve is the constraint. Solution dots appear where the two gradient arrows become parallel.',
+      chips: [['#146c5a','objective ∇f'], ['#b84a42','constraint ∇g'], ['#c47a22','solution']]
+    },
+    '/linear-ode': {
+      eyebrow: 'Differential equations',
+      deck: 'Connect the slope field, solution family, initial condition, and integrating factor in one view.',
+      guide: '<b>Read the picture:</b> short strokes encode the local slope. The emphasized curve is the solution through the initial point; faint curves show the family.',
+      chips: [['#3276b1','chosen solution'], ['#7c8796','slope field'], ['#18869b','integrating factor']]
+    },
+    '/leibniz': {
+      eyebrow: 'Changing integrals',
+      deck: 'Separate total area change into a moving left edge, moving right edge, and a changing integrand.',
+      guide: '<b>Read the picture:</b> red and amber boundaries sweep area in or out; the curve itself can also change. The cards below add those three contributions.',
+      chips: [['#b84a42','lower edge'], ['#c47a22','upper edge'], ['#3276b1','shape change']]
+    }
+  };
+
+  const info = PAGE[location.pathname];
+  if (info) {
+    const header = document.querySelector('body > header');
+    const title = header?.querySelector('h1');
+    if (header && title) {
+      const eyebrow = document.createElement('div');
+      eyebrow.className = 'page-eyebrow';
+      eyebrow.textContent = info.eyebrow;
+      const deck = document.createElement('p');
+      deck.className = 'page-deck';
+      deck.textContent = info.deck;
+      header.insertBefore(eyebrow, title);
+      title.after(deck);
+    }
+
+    document.querySelectorAll('.canvas-wrap').forEach((wrap, index) => {
+      const guide = document.createElement('details');
+      guide.className = 'visual-guide';
+      const label = location.pathname === '/substitution'
+        ? (index === 0 ? 'How to read x-space' : 'How to read u-space')
+        : 'How to read this visual';
+      guide.innerHTML = `<summary><span aria-hidden="true">◎</span>${label}<span class="visual-guide-chev">⌃</span></summary><div class="visual-guide-body"><p>${info.guide}</p><div class="visual-legend">${info.chips.map(c => `<span><i style="--chip:${c[0]}"></i>${c[1]}</span>`).join('')}</div></div>`;
+      wrap.appendChild(guide);
+    });
+  }
+
+  const mainPanel = document.querySelector('.layout > .panel');
+  if (mainPanel) {
+    let presetDetails = Array.from(mainPanel.querySelectorAll('details')).find(d => d.querySelector('.preset-btn'));
+    if (presetDetails) presetDetails.classList.add('preset-fold');
+    if (!presetDetails) {
+      const labels = Array.from(mainPanel.querySelectorAll(':scope > .sec-label'));
+      const presetLabel = labels.find(el => el.textContent.trim().toLowerCase() === 'presets');
+      if (presetLabel) {
+        presetDetails = document.createElement('details');
+        presetDetails.className = 'preset-fold';
+        presetDetails.innerHTML = '<summary><span>Try an example</span><span class="preset-count"></span><span class="fold-chev">⌄</span></summary><div class="preset-list"></div>';
+        const list = presetDetails.querySelector('.preset-list');
+        presetLabel.before(presetDetails);
+        let node = presetLabel.nextElementSibling;
+        let count = 0;
+        while (node && node.classList.contains('preset-btn')) {
+          const next = node.nextElementSibling;
+          list.appendChild(node); count += 1; node = next;
+        }
+        presetDetails.querySelector('.preset-count').textContent = `${count} examples`;
+        presetLabel.remove();
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

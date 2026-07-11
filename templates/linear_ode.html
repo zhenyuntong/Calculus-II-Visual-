@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% block title %}Linear ODE{% endblock %}
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<style>
+body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
+.layout{display:grid;grid-template-columns:260px 1fr;gap:10px;flex:1;min-height:0;}
+.right-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
+.canvas-wrap{flex:1;min-height:340px;}
+@media(max-width:860px){.layout{grid-template-columns:1fr;}}
+</style>
+{% endblock %}
+
+{% block body %}
+<a class="back-link" href="/">← Menu</a>
+<header>
+  <h1>Linear ODE &amp; Integrating Factor</h1>
+  <div class="formula-strip">
+    <div class="formula-card"><span id="hdr-ode"></span></div>
+    <div class="formula-card"><span id="hdr-mu"></span></div>
+  </div>
+</header>
+<details class="explain">
+  <summary><span class="ex-tag">LEARN</span>&nbsp; Integrating Factor — making a product rule appear <span class="ex-chev">▶</span></summary>
+  <div class="explain-body">
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--teal)">The Trick</div>
+      <p class="ex-text">Multiply both sides by <b>μ(x) = e^∫P dx</b>. The left side becomes <b>d/dx[μ·y]</b> by the product rule. Then integrate both sides to get μ·y = ∫μQ dx, hence <b>y = (∫μQ dx)/μ</b>.</p>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--blue)">Solution Family</div>
+      <div class="ex-fbox">y = (1/μ)(∫μQ dx + C)<br>Changing C shifts the family vertically in the μ-scaled frame. The particular solution uses the initial condition y(x₀)=y₀ to pin C.</div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--accent)">Try This</div>
+      <div class="ex-tip">Grey curves = solution family (different C). Blue = particular solution through (x₀, y₀). Green = integrating factor μ(x).</div>
+    </div>
+  </div>
+</details>
+<div class="layout">
+  <div class="panel">
+    <div class="sec-label">y′ + P(x)·y = Q(x)</div>
+    <div class="field">
+      <label>P(x) =</label>
+      <input type="text" id="inp-P" value="1" autocomplete="off" spellcheck="false">
+      <div class="sym-bar" data-target="inp-P">
+        <button class="sym" data-ins="1">1</button><button class="sym" data-ins="x">x</button>
+        <button class="sym" data-ins="1/x">1/x</button><button class="sym" data-ins="2*x">2x</button>
+        <button class="sym" data-ins="-1">-1</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Q(x) =</label>
+      <input type="text" id="inp-Q" value="exp(-x)" autocomplete="off" spellcheck="false">
+      <div class="sym-bar" data-target="inp-Q">
+        <button class="sym" data-ins="exp(-x)">e⁻ˣ</button><button class="sym" data-ins="sin(x)">sin</button>
+        <button class="sym" data-ins="x">x</button><button class="sym" data-ins="1">1</button>
+        <button class="sym" data-ins="x^2">x²</button>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>x₀</label><input type="number" id="inp-x0" value="0" step="0.5"></div>
+      <div class="field"><label>y₀</label><input type="number" id="inp-y0" value="1" step="0.5"></div>
+    </div>
+    <div class="err-msg" id="err"></div>
+    <button class="apply-btn" id="btn-apply">Apply ↵</button>
+    <hr>
+    <div class="toggle-row">
+      <label class="toggle-label">Show solution family</label>
+      <input type="checkbox" id="chk-family" checked>
+    </div>
+    <div class="toggle-row">
+      <label class="toggle-label">Show integrating factor μ(x)</label>
+      <input type="checkbox" id="chk-mu" checked>
+    </div>
+    <div class="toggle-row">
+      <label class="toggle-label">Show slope field</label>
+      <input type="checkbox" id="chk-slope" checked>
+    </div>
+    <hr>
+    <div class="sec-label">Presets</div>
+    <button class="preset-btn" data-P="1" data-Q="exp(-x)" data-x0="0" data-y0="1"><span class="preset-main">y′+y=e⁻ˣ</span><span class="preset-sub">P=1, Q=e⁻ˣ, simple decay</span></button>
+    <button class="preset-btn" data-P="2*x" data-Q="1" data-x0="0" data-y0="0"><span class="preset-main">y′+2xy=1</span><span class="preset-sub">Gaussian integrating factor</span></button>
+    <button class="preset-btn" data-P="-1" data-Q="sin(x)" data-x0="0" data-y0="0"><span class="preset-main">y′−y=sin(x)</span><span class="preset-sub">Oscillating forcing</span></button>
+    <button class="preset-btn" data-P="1/x" data-Q="x" data-x0="1" data-y0="1"><span class="preset-main">y′+y/x=x</span><span class="preset-sub">Euler-type, P=1/x</span></button>
+    <button class="preset-btn" data-P="2" data-Q="x*exp(-2*x)" data-x0="0" data-y0="0"><span class="preset-main">y′+2y=xe⁻²ˣ</span><span class="preset-sub">Constant P, product Q</span></button>
+  </div>
+  <div class="right-col">
+    <div class="ctrl-row">
+      <button class="ctrl-btn active" data-view="sol" id="view-sol">Solution</button>
+      <button class="ctrl-btn" data-view="mu" id="view-mu">μ(x) view</button>
+    </div>
+    <div class="canvas-wrap" id="cwrap"><canvas id="plot"></canvas></div>
+  </div>
+</div>
+<div class="steps-panel">
+  <div class="steps-head">
+    <span class="steps-tag">SYMBOLIC STEPS</span>
+    <span class="steps-title">Linear ODE — SymPy step by step</span>
+    <span class="steps-loading" id="steps-loading"></span>
+  </div>
+  <div class="steps-list" id="steps-list"></div>
+</div>
+
+<script>
+const rk=(el,tex)=>el&&katex.render(tex,el,{throwOnError:false,displayMode:false});
+rk(document.getElementById('hdr-ode'),String.raw`y' + P(x)\,y = Q(x)`);
+rk(document.getElementById('hdr-mu'),String.raw`\mu = e^{\int P\,dx}`);
+
+document.querySelectorAll('.sym-bar').forEach(bar=>{
+  const tid=bar.dataset.target;
+  bar.querySelectorAll('.sym').forEach(btn=>{
+    btn.addEventListener('mousedown',e=>{
+      e.preventDefault();const inp=document.getElementById(tid);inp.focus();
+      const s=inp.selectionStart,end=inp.selectionEnd,ins=btn.dataset.ins;
+      inp.value=inp.value.slice(0,s)+ins+inp.value.slice(end);
+      inp.selectionStart=inp.selectionEnd=s+ins.length;
+    });
+  });
+});
+
+let PC=null,QC=null,x0=0,y0=1,currentView='sol';
+const DPR=window.devicePixelRatio||1;
+function sf(fn,x){try{const v=fn({x});return isFinite(v)?v:NaN;}catch{return NaN;}}
+function integrateNumeric(fn,a,b,n=200){
+  if(Math.abs(b-a)<1e-14)return 0;const sign=b<a?-1:1;if(sign<0)[a,b]=[b,a];
+  const h=(b-a)/n;let s=0;
+  for(let i=0;i<n;i++){const xi=a+(i+0.5)*h;const v=sf(fn,xi);s+=(isFinite(v)?v:0);}
+  return sign*s*h;
+}
+function buildMu(x0ref){
+  return x=>{
+    if(Math.abs(x-x0ref)<1e-14)return 1;
+    const intP=integrateNumeric(PC,x0ref,x,200);
+    return isFinite(intP)?Math.exp(intP):NaN;
+  };
+}
+function rk4(P,Q,x0s,y0s,xEnd,n=500){
+  const xs=[x0s],ys=[y0s];const h=(xEnd-x0s)/n;
+  for(let i=0;i<n;i++){
+    const xi=xs[xs.length-1],yi=ys[ys.length-1];
+    const dydt=yn=>sf(Q,xi)-sf(P,xi)*yn;
+    const k1=dydt(yi),k2=dydt(yi+h/2*k1),k3=dydt(yi+h/2*k2),k4=dydt(yi+h*k3);
+    xs.push(xi+h);ys.push(yi+h/6*(k1+2*k2+2*k3+k4));
+  }
+  return{xs,ys};
+}
+
+let muFn=null;
+
+function draw(){
+  if(!PC||!QC)return;
+  const wrap=document.getElementById('cwrap');
+  const cw=wrap.clientWidth,ch=wrap.clientHeight;
+  const canvas=document.getElementById('plot');
+  canvas.width=cw*DPR;canvas.height=ch*DPR;canvas.style.width=cw+'px';canvas.style.height=ch+'px';
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,Hc=canvas.height,pad=Math.round(50*DPR);
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,Hc);
+
+  const xMin=x0-3,xMax=x0+5;
+  const {xs:solXs,ys:solYs}=rk4(PC,QC,xMin,y0+(rk4(PC,QC,x0,y0,xMin,100).ys.at(-1)-y0)*-1,xMax,600);
+  const particularXs=[],particularYs=[];
+  {const r=rk4(PC,QC,x0,y0,xMax,400);particularXs.push(...r.xs);particularYs.push(...r.ys);}
+  {const r=rk4(PC,QC,x0,y0,xMin,200);particularXs.unshift(...r.xs.slice(0,-1).reverse());particularYs.unshift(...r.ys.slice(0,-1).reverse());}
+
+  let yMin=Infinity,yMax=-Infinity;
+  [...particularYs].filter(isFinite).forEach(v=>{yMin=Math.min(yMin,v);yMax=Math.max(yMax,v);});
+  const yPad=(yMax-yMin)*0.35;yMin-=yPad;yMax+=yPad;
+  if(yMax-yMin<0.5){yMin-=1;yMax+=1;}
+  const ppx=x=>pad+(x-xMin)/(xMax-xMin)*(W-2*pad);
+  const ppy=y=>Hc-pad-(y-yMin)/(yMax-yMin)*(Hc-2*pad);
+
+  ctx.strokeStyle='#f5f5f5';ctx.lineWidth=1;
+  for(let i=Math.ceil(xMin);i<=xMax;i++){ctx.beginPath();ctx.moveTo(ppx(i),pad);ctx.lineTo(ppx(i),Hc-pad);ctx.stroke();}
+  for(let i=Math.ceil(yMin);i<=yMax;i++){ctx.beginPath();ctx.moveTo(pad,ppy(i));ctx.lineTo(W-pad,ppy(i));ctx.stroke();}
+  ctx.strokeStyle='#e5e7eb';ctx.lineWidth=1.2;
+  if(0>=xMin&&0<=xMax){ctx.beginPath();ctx.moveTo(ppx(0),pad);ctx.lineTo(ppx(0),Hc-pad);ctx.stroke();}
+  if(0>=yMin&&0<=yMax){ctx.beginPath();ctx.moveTo(pad,ppy(0));ctx.lineTo(W-pad,ppy(0));ctx.stroke();}
+
+  if(document.getElementById('chk-slope').checked){
+    const nx=20,ny=16;
+    for(let i=0;i<=nx;i++){for(let j=0;j<=ny;j++){
+      const xi=xMin+(xMax-xMin)*i/nx,yi=yMin+(yMax-yMin)*j/ny;
+      const slope=sf(QC,xi)-sf(PC,xi)*yi;if(!isFinite(slope))continue;
+      const len=0.12*(xMax-xMin)/nx,ang=Math.atan(slope);
+      const cx=ppx(xi),cy=ppy(yi),dx=len/2*Math.cos(ang)*(W-2*pad)/(xMax-xMin),dy=len/2*Math.sin(ang)*(Hc-2*pad)/(yMax-yMin);
+      ctx.beginPath();ctx.moveTo(cx-dx,cy+dy);ctx.lineTo(cx+dx,cy-dy);ctx.strokeStyle='rgba(156,163,175,0.35)';ctx.lineWidth=1.2*DPR;ctx.stroke();
+    }}
+  }
+
+  if(document.getElementById('chk-family').checked){
+    const offsets=[-3,-2,-1,1,2,3];
+    offsets.forEach(off=>{
+      const r1=rk4(PC,QC,x0,y0+off*0.8,xMax,300);
+      const r2=rk4(PC,QC,x0,y0+off*0.8,xMin,150);
+      const fxs=[...r2.xs.slice(0,-1).reverse(),...r1.xs];
+      const fys=[...r2.ys.slice(0,-1).reverse(),...r1.ys];
+      ctx.beginPath();let pen=false;
+      fxs.forEach((x,k)=>{const v=fys[k];if(!isFinite(v)||v<yMin-2||v>yMax+2){pen=false;return;}if(!pen){ctx.moveTo(ppx(x),ppy(v));pen=true;}else ctx.lineTo(ppx(x),ppy(v));});
+      ctx.strokeStyle='rgba(156,163,175,0.35)';ctx.lineWidth=1.2*DPR;ctx.stroke();
+    });
+  }
+
+  if(document.getElementById('chk-mu').checked&&muFn){
+    const muXs=Array.from({length:200},(_,i)=>xMin+(xMax-xMin)*i/199);
+    const muYs=muXs.map(x=>muFn(x));
+    const muValid=muYs.filter(isFinite);if(muValid.length>1){
+      const muScale=(yMax-yMin)/Math.max(Math.max(...muValid)-Math.min(...muValid),0.5);
+      const muOff=yMin+0.2*(yMax-yMin);
+      ctx.beginPath();let penm=false;
+      muXs.forEach((x,k)=>{const v=muYs[k]*muScale*0.3+muOff;if(!isFinite(v)||v<yMin-2||v>yMax+2){penm=false;return;}if(!penm){ctx.moveTo(ppx(x),ppy(v));penm=true;}else ctx.lineTo(ppx(x),ppy(v));});
+      ctx.strokeStyle='rgba(8,145,178,0.55)';ctx.lineWidth=1.8*DPR;ctx.setLineDash([5*DPR,3*DPR]);ctx.stroke();ctx.setLineDash([]);
+    }
+  }
+
+  ctx.beginPath();let pens=false;
+  particularXs.forEach((x,k)=>{const v=particularYs[k];if(!isFinite(v)||v<yMin-2||v>yMax+2){pens=false;return;}if(!pens){ctx.moveTo(ppx(x),ppy(v));pens=true;}else ctx.lineTo(ppx(x),ppy(v));});
+  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2.5*DPR;ctx.stroke();
+
+  ctx.beginPath();ctx.arc(ppx(x0),ppy(y0),6*DPR,0,2*Math.PI);ctx.fillStyle='#ef4444';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2*DPR;ctx.stroke();
+  ctx.fillStyle='#111827';ctx.font=`${Math.round(10*DPR)}px system-ui`;ctx.textAlign='left';ctx.fillText(`(${x0}, ${y0})`,ppx(x0)+10*DPR,ppy(y0)-8*DPR);
+
+  ctx.fillStyle='#9ca3af';ctx.font=`${Math.round(10*DPR)}px system-ui`;ctx.textAlign='center';
+  for(let i=Math.ceil(xMin);i<=xMax;i++){ctx.fillText(i,ppx(i),Hc-pad+Math.round(16*DPR));}
+  ctx.textAlign='right';for(let i=Math.ceil(yMin);i<=yMax;i++){if(i%2===0||yMax-yMin<5)ctx.fillText(i,pad-6,ppy(i)+4);}
+  ctx.textAlign='center';ctx.fillText('x',W-pad+Math.round(14*DPR),Hc-pad+4);ctx.fillText('y',pad,pad-10);
+
+  const legx=W-pad-Math.round(130*DPR),legy=pad+Math.round(12*DPR);
+  ctx.font=`bold ${Math.round(10*DPR)}px system-ui`;ctx.textAlign='left';
+  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.moveTo(legx,legy);ctx.lineTo(legx+24*DPR,legy);ctx.stroke();ctx.fillStyle='#3b82f6';ctx.fillText('particular',legx+28*DPR,legy+4);
+  if(document.getElementById('chk-mu').checked){ctx.strokeStyle='rgba(8,145,178,0.6)';ctx.setLineDash([4*DPR,3*DPR]);ctx.beginPath();ctx.moveTo(legx,legy+18*DPR);ctx.lineTo(legx+24*DPR,legy+18*DPR);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#0891b2';ctx.fillText('μ(x) scaled',legx+28*DPR,legy+22*DPR);}
+}
+
+function renderSteps(steps){
+  const list=document.getElementById('steps-list');list.innerHTML='';
+  steps.forEach((step,i)=>{
+    const div=document.createElement('div');div.className='step-item';
+    div.innerHTML=`<div class="step-num" style="color:${step.color};border-color:${step.color}44">${i+1}</div><div class="step-body"><div class="step-katex"></div><div class="step-desc">${step.desc}</div></div><div class="step-val" style="color:${step.color}">${step.val||''}</div>`;
+    try{katex.render(step.latex,div.querySelector('.step-katex'),{throwOnError:false,displayMode:false});}catch(e){}
+    list.appendChild(div);
+  });
+}
+async function fetchSteps(){
+  const loading=document.getElementById('steps-loading');loading.textContent='Computing…';
+  const PRaw=document.getElementById('inp-P').value.trim();
+  const QRaw=document.getElementById('inp-Q').value.trim();
+  try{
+    const res=await fetch('/api/ode',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({P:PRaw.replace(/\^/g,'**'),Q:QRaw.replace(/\^/g,'**'),x0,y0})});
+    const data=await res.json();renderSteps(data.steps);loading.textContent='';
+  }catch(e){loading.textContent='(steps unavailable)';}
+}
+
+function applyFn(){
+  const PRaw=document.getElementById('inp-P').value.trim();
+  const QRaw=document.getElementById('inp-Q').value.trim();
+  x0=parseFloat(document.getElementById('inp-x0').value)||0;
+  y0=parseFloat(document.getElementById('inp-y0').value)||1;
+  const errEl=document.getElementById('err');errEl.textContent='';
+  let pc,qc;
+  try{pc=math.compile(PRaw);pc.evaluate({x:1});}catch(e){errEl.textContent='P: '+e.message;return;}
+  try{qc=math.compile(QRaw);qc.evaluate({x:1});}catch(e){errEl.textContent='Q: '+e.message;return;}
+  PC=scope=>pc.evaluate(scope);QC=scope=>qc.evaluate(scope);
+  muFn=buildMu(x0);draw();fetchSteps();
+}
+
+document.getElementById('btn-apply').addEventListener('click',applyFn);
+document.getElementById('inp-P').addEventListener('keydown',e=>{if(e.key==='Enter')applyFn();});
+document.getElementById('inp-Q').addEventListener('keydown',e=>{if(e.key==='Enter')applyFn();});
+document.querySelectorAll('.preset-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.getElementById('inp-P').value=btn.dataset.p||btn.dataset.P;document.getElementById('inp-Q').value=btn.dataset.q||btn.dataset.Q;
+    document.getElementById('inp-x0').value=btn.dataset.x0;document.getElementById('inp-y0').value=btn.dataset.y0;applyFn();
+  });
+});
+document.getElementById('chk-family').addEventListener('change',draw);
+document.getElementById('chk-mu').addEventListener('change',draw);
+document.getElementById('chk-slope').addEventListener('change',draw);
+const ro=new ResizeObserver(()=>{if(PC)draw();});
+ro.observe(document.getElementById('cwrap'));
+applyFn();
+</script>
+{% endblock %}

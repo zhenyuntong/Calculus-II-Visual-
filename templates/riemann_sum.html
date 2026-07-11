@@ -1,0 +1,930 @@
+{% extends 'base.html' %}
+{% block title %}Riemann Sum{% endblock %}
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<style>
+body { min-height:100vh; display:flex; flex-direction:column; padding:12px; gap:10px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px 8px 1fr;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+.right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding-left: 10px;
+  min-width: 0;
+}
+.layout.dock-right .right-col { padding-left: 0; padding-right: 10px; }
+
+/* Canvas wrap — relative for overlaid buttons */
+.canvas-wrap { flex: 1; min-height: 240px; position: relative; }
+canvas {
+  display: block; width: 100%; height: 100%;
+  border-radius: var(--r);
+  cursor: crosshair;
+}
+canvas.panning { cursor: grabbing; }
+
+/* Reset-view button overlaid on canvas corner */
+.canvas-fit-btn {
+  position: absolute;
+  top: 8px; right: 8px;
+  z-index: 5;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+  font-size: 0.69rem;
+  font-family: 'Inter', sans-serif;
+  padding: 3px 7px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity .15s, color .15s, border-color .15s;
+}
+.canvas-fit-btn:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* Method buttons */
+.method-row { display: flex; gap: 5px; }
+.method-btn {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  padding: 6px 4px;
+  font-size: 0.75rem;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+  white-space: nowrap;
+}
+.method-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* n slider row */
+.n-row { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.n-big {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  min-width: 2.4em;
+  text-align: right;
+  line-height: 1;
+  flex-shrink: 0;
+}
+/* ∞ toggle button */
+.n-inf-btn {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-3);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background .12s, border-color .12s, color .12s;
+  font-family: 'Inter', sans-serif;
+}
+.n-inf-btn.active {
+  background: rgba(59,130,246,0.12);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* Bound hints */
+.bounds-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.panel.narrow .bounds-grid { grid-template-columns: 1fr; }
+.panel.narrow .sym-bar .sym { padding: 2px 4px; font-size: 0.66rem; }
+.panel.narrow .method-btn   { font-size: 0.68rem; padding: 5px 2px; }
+
+.bound-hint {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  font-family: 'JetBrains Mono', monospace;
+  padding: 2px 9px 0;
+  min-height: 14px;
+  line-height: 1;
+}
+
+/* ctrl-row method label */
+.method-lbl { font-size: .72rem; color: var(--text-3); align-self: center; }
+
+/* n=∞ covers the stats Approx with "= Exact" visually */
+.stat-inf { font-size: 0.68rem; color: var(--text-3); font-style: italic; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr !important; }
+  .right-col { padding-left: 0 !important; padding-right: 0 !important; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+{% endblock %}
+
+{% block body %}
+<a class="back-link" href="/">← Menu</a>
+<header><h1>Riemann Sum</h1></header>
+<details class="explain">
+  <summary><span class="ex-tag">LEARN</span>&nbsp; Riemann sums — why rectangles become the integral <span class="ex-chev">▶</span></summary>
+  <div class="explain-body">
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--accent)">The idea</div>
+      <p class="ex-text">The original function is the curve <b>f(x)</b>. Each method replaces a tiny curved strip of area with a simpler shape: left, right, and midpoint use rectangles; trapezoid uses a slanted top. As <b>n</b> grows, each strip gets thinner, so the shape error shrinks.</p>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--blue)">Why it works</div>
+      <div class="ex-fbox"><span id="learn-riemann"></span><br>The definite integral is the limit of these signed area approximations as the widest slice goes to 0.</div>
+    </div>
+  </div>
+</details>
+
+<div class="layout">
+
+  <!-- ══ LEFT PANEL ══════════════════════════════════════════════ -->
+  <div class="panel">
+
+    <!-- f(x) — math-preview injected above input by base.html -->
+    <div class="sec-label">f(x)</div>
+    <div class="field">
+      <input type="text" id="inp-f" value="sin(x) + 0.5"
+             autocomplete="off" spellcheck="false" placeholder="e.g. sin(x)+0.5">
+      <div class="sym-bar" data-target="inp-f" style="margin-top:4px;">
+        <button class="sym" data-ins="sin(">sin</button>
+        <button class="sym" data-ins="cos(">cos</button>
+        <button class="sym" data-ins="exp(">exp</button>
+        <button class="sym" data-ins="sqrt(">√</button>
+        <button class="sym" data-ins="log(">log</button>
+        <button class="sym" data-ins="^2">x²</button>
+        <button class="sym" data-ins="^">^</button>
+        <button class="sym" data-ins="pi">π</button>
+        <button class="sym" data-ins="abs(">|·|</button>
+      </div>
+    </div>
+
+    <!-- Limits -->
+    <div class="sec-label" style="margin-top:2px;">Limits</div>
+    <div class="bounds-grid">
+      <div class="field">
+        <label>a — lower</label>
+        <input type="text" id="inp-a" value="0"
+               autocomplete="off" spellcheck="false" placeholder="-pi">
+        <div class="bound-hint" id="hint-a"></div>
+      </div>
+      <div class="field">
+        <label>b — upper</label>
+        <input type="text" id="inp-b" value="pi"
+               autocomplete="off" spellcheck="false" placeholder="pi">
+        <div class="bound-hint" id="hint-b"></div>
+      </div>
+    </div>
+
+    <div class="err-msg" id="err"></div>
+    <button class="apply-btn" id="btn-apply">Apply ↵</button>
+
+    <hr>
+
+    <!-- Method -->
+    <div class="sec-label">Method</div>
+    <div class="method-row" id="method-row">
+      <button class="method-btn active" data-m="left">Left</button>
+      <button class="method-btn"        data-m="right">Right</button>
+      <button class="method-btn"        data-m="mid">Mid</button>
+      <button class="method-btn"        data-m="trap">Trap</button>
+    </div>
+
+    <!-- n slider + ∞ -->
+    <div class="sec-label" style="margin-top:2px;">Subdivisions n</div>
+    <div class="n-row">
+      <input type="range" id="n-slider" min="1" max="300" value="8" style="flex:1;min-width:0;">
+      <span class="n-big" id="n-val">8</span>
+      <button class="n-inf-btn" id="n-inf" title="Set n → ∞ (exact integral)">∞</button>
+    </div>
+
+    <hr>
+
+    <!-- Presets -->
+    <details>
+      <summary style="font-size:0.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--text-3);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
+        <span>Presets</span><span style="margin-left:auto;color:var(--accent);font-size:.6rem">▶</span>
+      </summary>
+      <div style="display:flex;flex-direction:column;gap:5px;padding-top:8px;">
+        <button class="preset-btn" data-f="sin(x) + 0.5" data-a="0" data-b="pi">
+          <span class="preset-main">Sine arch</span>
+          <span class="preset-sub">sin(x)+0.5, [0, π]</span>
+        </button>
+        <button class="preset-btn" data-f="x^2" data-a="0" data-b="3">
+          <span class="preset-main">Parabola</span>
+          <span class="preset-sub">x², [0, 3]</span>
+        </button>
+        <button class="preset-btn" data-f="exp(-x^2)" data-a="-2" data-b="2">
+          <span class="preset-main">Gaussian</span>
+          <span class="preset-sub">e^(−x²), [−2, 2]</span>
+        </button>
+        <button class="preset-btn" data-f="1/x" data-a="1" data-b="4">
+          <span class="preset-main">ln area</span>
+          <span class="preset-sub">1/x, [1, 4]</span>
+        </button>
+        <button class="preset-btn" data-f="sqrt(1 - x^2)" data-a="-1" data-b="1">
+          <span class="preset-main">Semicircle ≈ π/2</span>
+          <span class="preset-sub">√(1−x²), [−1, 1]</span>
+        </button>
+        <button class="preset-btn" data-f="sin(x^2)" data-a="0" data-b="sqrt(pi)">
+          <span class="preset-main">Fresnel</span>
+          <span class="preset-sub">sin(x²), [0, √π]</span>
+        </button>
+      </div>
+    </details>
+
+  </div><!-- end .panel -->
+
+  <!-- ══ RIGHT COLUMN ════════════════════════════════════════════ -->
+  <div class="right-col">
+
+    <!-- Formula display (callout — NOT an input box) -->
+    <div class="formula-callout" id="formula-callout">
+      <span class="fc-badge" id="fc-badge">≈</span>
+      <div id="id-sum"></div>
+    </div>
+    <div class="formula-dx" id="id-dx"></div>
+
+    <!-- Canvas with pan/zoom -->
+    <div class="canvas-wrap" id="cwrap">
+      <canvas id="plot"></canvas>
+      <button class="canvas-fit-btn" id="btn-fit" title="Fit view to function">⊡ Fit</button>
+    </div>
+
+    <!-- Controls -->
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-play">▶ Animate n</button>
+      <button class="ctrl-btn" id="btn-reset">↺ Reset n</button>
+      <span style="flex:1"></span>
+      <span class="method-lbl" id="method-label">Left rule</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat">
+        <span class="stat-lbl">Approx</span>
+        <span class="stat-val" id="sv-approx" style="color:var(--accent)">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-lbl">Exact</span>
+        <span class="stat-val" id="sv-exact" style="color:var(--blue)">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-lbl">|Error|</span>
+        <span class="stat-val" id="sv-err" style="color:var(--amber)">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-lbl">Rel %</span>
+        <span class="stat-val" id="sv-rel" style="color:var(--red)">—</span>
+      </div>
+    </div>
+
+  </div><!-- end .right-col -->
+</div><!-- end .layout -->
+
+<!-- Steps panel -->
+<div class="steps-panel">
+  <div class="steps-head">
+    <span class="steps-tag">SYMBOLIC STEPS</span>
+    <span class="steps-title">Step-by-step solution</span>
+    <span class="steps-loading" id="steps-loading"></span>
+  </div>
+  <div class="steps-list" id="steps-list"></div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════════════ */
+const DPR = window.devicePixelRatio || 1;
+const canvas = document.getElementById('plot');
+const ctx    = canvas.getContext('2d');
+
+const S = {
+  fn: null, a: 0, b: Math.PI, aStr: '0', bStr: 'pi',
+  n: 8, method: 'left', nInfty: false,
+  playing: false, animId: null,
+};
+katex.render(String.raw`\int_a^b f(x)\,dx=\lim_{n\to\infty}\sum_{i=1}^{n} f(x_i^*)\,\Delta x`,
+  document.getElementById('learn-riemann'), { throwOnError: false, displayMode: false });
+
+/* Viewport — null means "auto-fit" */
+const VIEW = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
+
+/* ════════════════════════════════════════════════════════════════
+   VIEWPORT
+════════════════════════════════════════════════════════════════ */
+function autoFitView() {
+  if (!S.fn) return;
+  const margin = (S.b - S.a) * 0.18;
+  const xMin = S.a - margin, xMax = S.b + margin;
+  const NP = 320;
+  const xs = Array.from({ length: NP }, (_, i) => xMin + (xMax - xMin) * i / (NP - 1));
+  const ys = xs.map(xi => safeF(S.fn, xi)).filter(isFinite);
+  if (!ys.length) return;
+  let yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 0);
+  if (Math.abs(yMax - yMin) < 1e-10) { yMin -= 1; yMax += 1; }
+  const yPad = (yMax - yMin) * 0.20;
+  VIEW.xMin = xMin; VIEW.xMax = xMax;
+  VIEW.yMin = yMin - yPad; VIEW.yMax = yMax + yPad;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   NICE TICKS
+════════════════════════════════════════════════════════════════ */
+function niceTicks(min, max, maxN = 7) {
+  const range = max - min;
+  if (!isFinite(range) || range === 0) return [min];
+  const rough = range / maxN;
+  const exp   = Math.floor(Math.log10(Math.abs(rough)));
+  const frac  = rough / Math.pow(10, exp);
+  const nice  = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
+  const step  = nice * Math.pow(10, exp);
+  const start = Math.ceil(min / step) * step;
+  const out   = [];
+  for (let t = start; t <= max + step * 1e-6; t += step) {
+    out.push(parseFloat(t.toFixed(12)));
+  }
+  return out;
+}
+function fmtTick(v) {
+  if (v === 0) return '0';
+  if (Math.abs(v) >= 1e4 || (Math.abs(v) < 0.01 && v !== 0)) return v.toExponential(1);
+  const s = v.toPrecision(4);
+  return parseFloat(s).toString();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   NUMERICS
+════════════════════════════════════════════════════════════════ */
+function safeF(fn, xv) {
+  try { const v = fn({ x: xv }); return isFinite(v) ? v : NaN; } catch { return NaN; }
+}
+function simpson(fn, a, b, n = 600) {
+  if (Math.abs(b - a) < 1e-12) return 0;
+  if (n % 2) n++;
+  const h = (b - a) / n;
+  let s = safeF(fn, a) + safeF(fn, b);
+  for (let i = 1; i < n; i++) {
+    const v = safeF(fn, a + i * h);
+    s += (i % 2 === 0 ? 2 : 4) * (isFinite(v) ? v : 0);
+  }
+  return s * h / 3;
+}
+function riemannSum(fn, a, b, n, method) {
+  const dx = (b - a) / n;
+  let s = 0;
+  for (let i = 0; i < n; i++) {
+    if (method === 'trap') {
+      const y0 = safeF(fn, a + i * dx), y1 = safeF(fn, a + (i + 1) * dx);
+      if (isFinite(y0) && isFinite(y1)) s += (y0 + y1) * 0.5 * dx;
+    } else {
+      const xi = method === 'left'  ? a + i * dx
+               : method === 'right' ? a + (i + 1) * dx
+               :                      a + (i + 0.5) * dx;
+      const y = safeF(fn, xi);
+      if (isFinite(y)) s += y * dx;
+    }
+  }
+  return s;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   DRAW
+════════════════════════════════════════════════════════════════ */
+function draw() {
+  if (!S.fn) return;
+
+  /* Resize canvas to wrapper */
+  const wrap = document.getElementById('cwrap');
+  const cw = wrap.clientWidth, ch = wrap.clientHeight;
+  canvas.width  = cw * DPR; canvas.height = ch * DPR;
+  canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+
+  const W = canvas.width, H = canvas.height;
+  const PAD = Math.round(48 * DPR);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+
+  const { fn, a, b, n, method, aStr, bStr, nInfty } = S;
+  const xSpan = VIEW.xMax - VIEW.xMin;
+  const ySpan = VIEW.yMax - VIEW.yMin;
+
+  function P(wx, wy) {
+    return [
+      PAD + (wx - VIEW.xMin) / xSpan * (W - 2 * PAD),
+      H - PAD - (wy - VIEW.yMin) / ySpan * (H - 2 * PAD),
+    ];
+  }
+
+  /* Clip to plot area */
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(PAD, PAD, W - 2 * PAD, H - 2 * PAD);
+  ctx.clip();
+
+  /* ── Grid ── */
+  const xTicks = niceTicks(VIEW.xMin, VIEW.xMax, Math.min(8, Math.round((W - 2*PAD) / (55*DPR))));
+  const yTicks = niceTicks(VIEW.yMin, VIEW.yMax, Math.min(7, Math.round((H - 2*PAD) / (45*DPR))));
+
+  ctx.lineWidth = 1;
+  xTicks.forEach(t => {
+    ctx.strokeStyle = (t === 0) ? '#d1d5db' : '#f0f0f0';
+    ctx.lineWidth   = (t === 0) ? 1.5 : 1;
+    const [px] = P(t, 0);
+    ctx.beginPath(); ctx.moveTo(px, PAD); ctx.lineTo(px, H - PAD); ctx.stroke();
+  });
+  yTicks.forEach(t => {
+    ctx.strokeStyle = (t === 0) ? '#d1d5db' : '#f0f0f0';
+    ctx.lineWidth   = (t === 0) ? 1.5 : 1;
+    const [, py] = P(0, t);
+    ctx.beginPath(); ctx.moveTo(PAD, py); ctx.lineTo(W - PAD, py); ctx.stroke();
+  });
+
+  /* ── Rectangles / trapezoids (skip when n=∞) ── */
+  if (!nInfty) {
+    const dx = (b - a) / n;
+    for (let i = 0; i < n; i++) {
+      if (method === 'trap') {
+        const y0 = safeF(fn, a + i * dx), y1 = safeF(fn, a + (i + 1) * dx);
+        if (!isFinite(y0) || !isFinite(y1)) continue;
+        const [x0p, y0p] = P(a + i * dx, 0),   [x1p] = P(a + (i + 1) * dx, 0);
+        const [, yp0]    = P(a + i * dx, y0),   [, yp1] = P(a + (i + 1) * dx, y1);
+        ctx.beginPath();
+        ctx.moveTo(x0p, y0p); ctx.lineTo(x0p, yp0);
+        ctx.lineTo(x1p, yp1); ctx.lineTo(x1p, y0p);
+        ctx.closePath();
+        ctx.fillStyle   = 'rgba(16,163,127,0.13)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(16,163,127,0.50)'; ctx.lineWidth = 0.9 * DPR; ctx.stroke();
+        continue;
+      }
+      const xi = method === 'left'  ? a + i * dx
+               : method === 'right' ? a + (i + 1) * dx
+               :                      a + (i + 0.5) * dx;
+      const y = safeF(fn, xi);
+      if (!isFinite(y)) continue;
+      const [rx, ry]  = P(a + i * dx, y);
+      const [, ry0]   = P(a + i * dx, 0);
+      const rw = Math.abs(P(a + (i + 1) * dx, 0)[0] - rx);
+      const rh = Math.abs(ry - ry0);
+      const ry1 = y >= 0 ? ry : ry0;
+      ctx.fillStyle   = 'rgba(16,163,127,0.12)'; ctx.fillRect(rx, ry1, rw, rh);
+      ctx.strokeStyle = 'rgba(16,163,127,0.50)'; ctx.lineWidth = 0.9 * DPR; ctx.strokeRect(rx, ry1, rw, rh);
+      const [dotx, doty] = P(xi, y);
+      ctx.beginPath(); ctx.arc(dotx, doty, 2.5 * DPR, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(16,163,127,0.9)'; ctx.fill();
+    }
+  }
+
+  /* ── Area shade under exact curve ── */
+  ctx.beginPath();
+  const [ax0, ay0] = P(a, 0); ctx.moveTo(ax0, ay0);
+  for (let i = 0; i <= 360; i++) {
+    const xi = a + (b - a) * i / 360;
+    const yi = safeF(fn, xi);
+    if (isFinite(yi)) { const [px, py] = P(xi, yi); ctx.lineTo(px, py); }
+  }
+  const [bx0] = P(b, 0); ctx.lineTo(bx0, ay0); ctx.closePath();
+  ctx.fillStyle = nInfty ? 'rgba(16,163,127,0.18)' : 'rgba(59,130,246,0.05)'; ctx.fill();
+
+  /* ── Function curve ── */
+  const NP = 500;
+  const xs = Array.from({ length: NP }, (_, i) => VIEW.xMin + xSpan * i / (NP - 1));
+  ctx.beginPath(); let pen = false;
+  for (let i = 0; i < NP; i++) {
+    const y = safeF(fn, xs[i]);
+    if (!isFinite(y)) { pen = false; continue; }
+    const [px, py] = P(xs[i], y);
+    if (!pen) { ctx.moveTo(px, py); pen = true; } else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2.2 * DPR; ctx.stroke();
+
+  ctx.restore(); /* end clip */
+
+  /* ── Axis tick labels (outside clip so they can be at edge) ── */
+  ctx.font = `${Math.round(9.5 * DPR)}px system-ui`;
+  ctx.fillStyle = '#9ca3af';
+  xTicks.forEach(t => {
+    const [px] = P(t, 0);
+    if (px < PAD - 2 || px > W - PAD + 2) return;
+    ctx.textAlign = 'center';
+    ctx.fillText(fmtTick(t), px, H - PAD + Math.round(14 * DPR));
+  });
+  yTicks.forEach(t => {
+    const [, py] = P(0, t);
+    if (py < PAD - 2 || py > H - PAD + 2) return;
+    ctx.textAlign = 'right';
+    ctx.fillText(fmtTick(t), PAD - 5 * DPR, py + 3.5 * DPR);
+  });
+
+  /* ── a, b boundary markers ── */
+  [[a, aStr, 'a'], [b, bStr, 'b']].forEach(([v, expr, letter]) => {
+    if (v < VIEW.xMin || v > VIEW.xMax) return;
+    const [vx] = P(v, 0);
+    ctx.strokeStyle = 'rgba(217,119,6,0.45)'; ctx.lineWidth = 1.4 * DPR;
+    ctx.setLineDash([4 * DPR, 3 * DPR]);
+    ctx.beginPath(); ctx.moveTo(vx, PAD); ctx.lineTo(vx, H - PAD); ctx.stroke();
+    ctx.setLineDash([]);
+    const lbl = (expr && isNaN(Number(expr.trim()))) ? expr.trim() : v.toFixed(3);
+    ctx.fillStyle = '#d97706';
+    ctx.font = `bold ${Math.round(9.5 * DPR)}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${letter}=${lbl}`, vx, H - PAD + Math.round(26 * DPR));
+  });
+
+  /* ── Top-right label ── */
+  const topLabel = nInfty
+    ? `n → ∞   [Exact]`
+    : `n = ${n}   [${METHOD_LABELS[method] || method}]`;
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = `${Math.round(9 * DPR)}px system-ui`;
+  ctx.textAlign = 'right';
+  ctx.fillText(topLabel, W - PAD, PAD - Math.round(10 * DPR));
+
+  /* ── Stats update ── */
+  const exact  = simpson(fn, a, b);
+  let approx;
+  if (nInfty) {
+    approx = exact;
+    document.getElementById('sv-approx').textContent = exact.toFixed(6);
+    document.getElementById('sv-exact') .textContent = exact.toFixed(6);
+    document.getElementById('sv-err')   .textContent = '0';
+    document.getElementById('sv-rel')   .textContent = '0%';
+  } else {
+    approx = riemannSum(fn, a, b, n, method);
+    const err = Math.abs(approx - exact);
+    const rel = exact !== 0 ? err / Math.abs(exact) : NaN;
+    document.getElementById('sv-approx').textContent = approx.toFixed(6);
+    document.getElementById('sv-exact') .textContent = exact.toFixed(6);
+    document.getElementById('sv-err')   .textContent = err.toExponential(3);
+    document.getElementById('sv-rel')   .textContent = isFinite(rel) ? (rel * 100).toFixed(3) + '%' : 'N/A';
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FORMULA DISPLAY
+════════════════════════════════════════════════════════════════ */
+const METHOD_LABELS = {
+  left: 'Left rule', right: 'Right rule', mid: 'Midpoint rule', trap: 'Trapezoid rule',
+};
+
+function getMethodFormulaTex(method, aTex, bTex, fTex, n) {
+  const sigma = `\\sum_{i=1}^{${n}}`;
+  const dx    = `\\Delta x`;
+  switch (method) {
+    case 'left':  return `\\int_{${aTex}}^{${bTex}}\\!${fTex}\\,dx \\approx ${sigma} f\\!\\bigl(${aTex}+(i{-}1)${dx}\\bigr)\\cdot${dx}`;
+    case 'right': return `\\int_{${aTex}}^{${bTex}}\\!${fTex}\\,dx \\approx ${sigma} f\\!\\bigl(${aTex}+i\\,${dx}\\bigr)\\cdot${dx}`;
+    case 'mid':   return `\\int_{${aTex}}^{${bTex}}\\!${fTex}\\,dx \\approx ${sigma} f\\!\\Bigl(${aTex}+\\bigl(i{-}\\tfrac{1}{2}\\bigr)${dx}\\Bigr)\\cdot${dx}`;
+    case 'trap':  return `\\int_{${aTex}}^{${bTex}}\\!${fTex}\\,dx \\approx ${sigma}\\tfrac{f(x_{i-1})+f(x_i)}{2}\\cdot${dx}`;
+  }
+}
+
+function updateFormulaDisplay() {
+  const fRaw = document.getElementById('inp-f').value.trim();
+  const aRaw = document.getElementById('inp-a').value.trim();
+  const bRaw = document.getElementById('inp-b').value.trim();
+  const sumEl   = document.getElementById('id-sum');
+  const dxEl    = document.getElementById('id-dx');
+  const badgeEl = document.getElementById('fc-badge');
+
+  const fTex = window.mathToLatex(fRaw);
+  const aTex = window.mathToLatex(aRaw);
+  const bTex = window.mathToLatex(bRaw);
+
+  let sumTex;
+  if (S.nInfty) {
+    badgeEl.textContent = '=';
+    sumTex = `\\int_{${aTex}}^{${bTex}}\\!${fTex}\\,dx = \\lim_{n\\to\\infty}\\sum_{i=1}^{n} f(x_i^*)\\,\\Delta x`;
+    dxEl.textContent = 'n → ∞: the sum converges exactly to the integral';
+  } else {
+    badgeEl.textContent = '≈';
+    sumTex = getMethodFormulaTex(S.method, aTex, bTex, fTex, S.n);
+    const aVal = evalBound(aRaw), bVal = evalBound(bRaw);
+    if (aVal !== null && bVal !== null) {
+      const dx = (bVal - aVal) / S.n;
+      dxEl.textContent = `Δx = (${bRaw} − ${aRaw}) / ${S.n} = ${dx.toFixed(6)}`;
+    } else {
+      dxEl.textContent = `Δx = (b − a) / n`;
+    }
+  }
+
+  try {
+    katex.render(sumTex, sumEl, { throwOnError: false, displayMode: false });
+  } catch { sumEl.textContent = '∫f dx ≈ sum'; }
+
+  document.getElementById('method-label').textContent =
+    S.nInfty ? 'n → ∞ (exact)' : (METHOD_LABELS[S.method] || S.method);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   BOUND HELPERS
+════════════════════════════════════════════════════════════════ */
+function evalBound(s) {
+  try { const v = Number(math.evaluate(s.trim())); return isFinite(v) ? v : null; }
+  catch { return null; }
+}
+function updateBoundHints() {
+  ['a', 'b'].forEach(id => {
+    const raw  = document.getElementById('inp-' + id).value.trim();
+    const hint = document.getElementById('hint-' + id);
+    const v    = evalBound(raw);
+    hint.textContent = (v !== null && raw !== String(v)) ? `= ${v.toFixed(6)}` : '';
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════
+   APPLY
+════════════════════════════════════════════════════════════════ */
+function applyFn(resetView = true) {
+  const raw  = document.getElementById('inp-f').value.trim();
+  const aRaw = document.getElementById('inp-a').value.trim();
+  const bRaw = document.getElementById('inp-b').value.trim();
+  const errEl = document.getElementById('err');
+  errEl.textContent = '';
+
+  const a = evalBound(aRaw), b = evalBound(bRaw);
+  if (a === null) { errEl.textContent = 'a: invalid expression'; return; }
+  if (b === null) { errEl.textContent = 'b: invalid expression'; return; }
+  if (a >= b)     { errEl.textContent = 'Need a < b'; return; }
+
+  let fn;
+  try {
+    const c = math.compile(raw); c.evaluate({ x: 0 });
+    fn = scope => c.evaluate(scope);
+  } catch (e) { errEl.textContent = 'f(x): ' + e.message; return; }
+
+  S.fn = fn; S.a = a; S.b = b; S.aStr = aRaw; S.bStr = bRaw;
+  if (resetView) autoFitView();
+  updateBoundHints();
+  updateFormulaDisplay();
+  draw();
+  fetchSteps();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   STEPS
+════════════════════════════════════════════════════════════════ */
+function renderSteps(steps) {
+  const list = document.getElementById('steps-list');
+  list.innerHTML = '';
+  steps.forEach((step, i) => {
+    const div = document.createElement('div');
+    div.className = 'step-item';
+    const titleHtml = step.title
+      ? `<div class="step-title" style="color:${step.color}">${step.title}</div>` : '';
+    div.innerHTML =
+      `<div class="step-num" style="color:${step.color};border-color:${step.color}44">${i + 1}</div>` +
+      `<div class="step-body">${titleHtml}<div class="step-katex"></div>` +
+      `<div class="step-desc">${step.desc}</div></div>` +
+      `<div class="step-val" style="color:${step.color}">${step.val || ''}</div>`;
+    try {
+      katex.render(step.latex, div.querySelector('.step-katex'),
+        { throwOnError: false, displayMode: false });
+    } catch {}
+    list.appendChild(div);
+  });
+}
+
+async function fetchSteps() {
+  if (!S.fn || S.nInfty) {
+    if (S.nInfty) {
+      /* show a concise n=∞ explanation */
+      renderSteps([{
+        color: '#3b82f6', title: 'Limit Definition',
+        latex: `\\int_a^b f(x)\\,dx = \\lim_{n\\to\\infty}\\sum_{i=1}^n f(x_i^*)\\,\\Delta x`,
+        desc: 'The definite integral IS the limit of the Riemann sum as n → ∞. With n → ∞, the rectangle widths shrink to zero and the sum converges exactly to the area under the curve.',
+        val: '',
+      }, {
+        color: '#10a37f', title: 'Exact Value (SymPy)',
+        latex: `\\text{Loading...}`,
+        desc: 'Fetching symbolic antiderivative from SymPy…',
+        val: '',
+      }]);
+    }
+    return;
+  }
+  const loading = document.getElementById('steps-loading');
+  loading.textContent = 'Computing…';
+  const raw = document.getElementById('inp-f').value.trim();
+  try {
+    const res = await fetch('/api/riemann', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ f: raw, a: S.a, b: S.b, n: S.n, method: S.method }),
+    });
+    renderSteps((await res.json()).steps);
+    loading.textContent = '';
+  } catch { loading.textContent = '(server unavailable)'; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PAN & ZOOM
+════════════════════════════════════════════════════════════════ */
+let panning = false, panStart = null, panSnap = null;
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  panning = true;
+  panStart = { x: e.clientX, y: e.clientY };
+  panSnap  = { ...VIEW };
+  canvas.classList.add('panning');
+  e.preventDefault();
+});
+window.addEventListener('mousemove', e => {
+  if (!panning) return;
+  const rect = canvas.getBoundingClientRect();
+  const dx = (e.clientX - panStart.x) / rect.width  * (panSnap.xMax - panSnap.xMin);
+  const dy = (e.clientY - panStart.y) / rect.height * (panSnap.yMax - panSnap.yMin);
+  VIEW.xMin = panSnap.xMin - dx; VIEW.xMax = panSnap.xMax - dx;
+  VIEW.yMin = panSnap.yMin + dy; VIEW.yMax = panSnap.yMax + dy;
+  draw();
+});
+window.addEventListener('mouseup', () => {
+  if (panning) { panning = false; canvas.classList.remove('panning'); }
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const PAD_CSS = 48;
+  const mx = (e.clientX - rect.left  - PAD_CSS) / (rect.width  - 2 * PAD_CSS);
+  const my = (e.clientY - rect.top   - PAD_CSS) / (rect.height - 2 * PAD_CSS);
+  const wx = VIEW.xMin + mx * (VIEW.xMax - VIEW.xMin);
+  const wy = VIEW.yMax - my * (VIEW.yMax - VIEW.yMin);
+  const factor = e.deltaY > 0 ? 1.13 : 1 / 1.13;
+  VIEW.xMin = wx - (wx - VIEW.xMin) * factor;
+  VIEW.xMax = wx + (VIEW.xMax - wx) * factor;
+  VIEW.yMin = wy - (wy - VIEW.yMin) * factor;
+  VIEW.yMax = wy + (VIEW.yMax - wy) * factor;
+  draw();
+}, { passive: false });
+
+/* Touch pan */
+let tStart = null, tSnap = null;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    tStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    tSnap  = { ...VIEW };
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && tStart) {
+    const rect = canvas.getBoundingClientRect();
+    const dx = (e.touches[0].clientX - tStart.x) / rect.width  * (tSnap.xMax - tSnap.xMin);
+    const dy = (e.touches[0].clientY - tStart.y) / rect.height * (tSnap.yMax - tSnap.yMin);
+    VIEW.xMin = tSnap.xMin - dx; VIEW.xMax = tSnap.xMax - dx;
+    VIEW.yMin = tSnap.yMin + dy; VIEW.yMax = tSnap.yMax + dy;
+    draw();
+  }
+}, { passive: false });
+
+/* Fit button */
+document.getElementById('btn-fit').addEventListener('click', () => {
+  autoFitView(); draw();
+});
+
+/* ════════════════════════════════════════════════════════════════
+   EVENT WIRING
+════════════════════════════════════════════════════════════════ */
+/* Sym-bar inserts */
+document.querySelectorAll('.sym-bar').forEach(bar => {
+  bar.querySelectorAll('.sym').forEach(btn => {
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const inp = document.getElementById(bar.dataset.target); inp.focus();
+      const s = inp.selectionStart, end = inp.selectionEnd, ins = btn.dataset.ins;
+      inp.value = inp.value.slice(0, s) + ins + inp.value.slice(end);
+      inp.selectionStart = inp.selectionEnd = s + ins.length;
+      updateFormulaDisplay();
+    });
+  });
+});
+
+document.getElementById('btn-apply').addEventListener('click', () => applyFn(true));
+['inp-f','inp-a','inp-b'].forEach(id =>
+  document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') applyFn(true); })
+);
+document.getElementById('inp-f').addEventListener('input', updateFormulaDisplay);
+document.getElementById('inp-a').addEventListener('input', () => { updateFormulaDisplay(); updateBoundHints(); });
+document.getElementById('inp-b').addEventListener('input', () => { updateFormulaDisplay(); updateBoundHints(); });
+
+/* Method buttons */
+document.querySelectorAll('.method-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.method = btn.dataset.m;
+    updateFormulaDisplay();
+    if (S.fn) { draw(); fetchSteps(); }
+  });
+});
+
+/* n slider */
+document.getElementById('n-slider').addEventListener('input', e => {
+  if (S.nInfty) return;
+  S.n = parseInt(e.target.value);
+  document.getElementById('n-val').textContent = S.n;
+  updateFormulaDisplay();
+  if (S.fn) { draw(); if (!S.playing) fetchSteps(); }
+});
+
+/* n=∞ toggle */
+document.getElementById('n-inf').addEventListener('click', () => {
+  S.nInfty = !S.nInfty;
+  const infBtn    = document.getElementById('n-inf');
+  const slider    = document.getElementById('n-slider');
+  const nValEl    = document.getElementById('n-val');
+  infBtn.classList.toggle('active', S.nInfty);
+  slider.disabled = S.nInfty;
+  slider.style.opacity = S.nInfty ? '0.35' : '';
+  nValEl.textContent   = S.nInfty ? '∞' : S.n;
+  updateFormulaDisplay();
+  if (S.fn) { draw(); fetchSteps(); }
+});
+
+/* Presets */
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('inp-f').value = btn.dataset.f;
+    document.getElementById('inp-a').value = btn.dataset.a;
+    document.getElementById('inp-b').value = btn.dataset.b;
+    applyFn(true);
+  });
+});
+
+/* Animate n */
+let animN = 1, animDir = 1;
+const playBtn = document.getElementById('btn-play');
+function animStep() {
+  if (!S.playing || S.nInfty) return;
+  animN += animDir;
+  if (animN >= 300) animDir = -1;
+  if (animN <= 1)   animDir =  1;
+  S.n = animN;
+  document.getElementById('n-slider').value = animN;
+  document.getElementById('n-val').textContent = animN;
+  updateFormulaDisplay(); draw();
+  S.animId = requestAnimationFrame(animStep);
+}
+playBtn.addEventListener('click', () => {
+  if (S.nInfty) return;
+  S.playing = !S.playing;
+  playBtn.textContent = S.playing ? '⏸ Pause' : '▶ Animate n';
+  playBtn.classList.toggle('active', S.playing);
+  if (S.playing) { animN = S.n; animDir = 1; requestAnimationFrame(animStep); }
+  else { cancelAnimationFrame(S.animId); fetchSteps(); }
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  S.playing = false; cancelAnimationFrame(S.animId);
+  playBtn.textContent = '▶ Animate n'; playBtn.classList.remove('active');
+  /* also exit ∞ mode */
+  S.nInfty = false;
+  document.getElementById('n-inf').classList.remove('active');
+  const slider = document.getElementById('n-slider');
+  slider.disabled = false; slider.style.opacity = '';
+  S.n = 8; slider.value = 8;
+  document.getElementById('n-val').textContent = 8;
+  updateFormulaDisplay(); draw(); fetchSteps();
+});
+
+/* Canvas resize */
+new ResizeObserver(() => { if (S.fn) draw(); }).observe(document.getElementById('cwrap'));
+
+/* Narrow panel */
+const panelEl = document.querySelector('.panel');
+new ResizeObserver(([e]) => {
+  panelEl.classList.toggle('narrow', e.contentRect.width < 210);
+}).observe(panelEl);
+
+/* ── Boot ── */
+applyFn(true);
+</script>
+{% endblock %}

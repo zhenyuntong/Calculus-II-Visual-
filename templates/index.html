@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}Math Visualizer{% endblock %}
+
+{% block extra_head %}
+<style>
+body { min-height: 100vh; padding: 40px 24px; }
+header { text-align: center; margin-bottom: 40px; }
+header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 8px; color: var(--text); }
+header p  { color: var(--text-2); font-size: 0.9rem; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: var(--accent-color);
+  border-radius: 12px 12px 0 0;
+  opacity: 0.85;
+}
+.card:hover {
+  border-color: var(--accent-color);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.07);
+}
+.card-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-color);
+}
+.card h2 { font-size: 1.0rem; font-weight: 600; letter-spacing: -0.02em; }
+.card-formula {
+  background: rgba(0,0,0,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-height: 2.4em;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+}
+.card-formula .katex { font-size: 0.82em !important; }
+.card p { font-size: 0.78rem; color: var(--text-2); line-height: 1.55; }
+.card-arrow { margin-top: auto; padding-top: 4px; font-size: 0.78rem; color: var(--accent-color); font-weight: 500; }
+footer { text-align: center; margin-top: 48px; color: var(--text-3); font-size: 0.75rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<header>
+  <h1>Math Visualizer</h1>
+  <p>Interactive explorations of core calculus and analysis topics</p>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<footer>Click any card to open the interactive visualizer</footer>
+
+<script>
+const rk = (el, tex) => el && katex.render(tex, el, { throwOnError: false, displayMode: false });
+
+const topics = [
+  {
+    href: '/riemann-sum',
+    accent: '#10a37f',
+    tag: 'Integration',
+    title: 'Riemann Sum',
+    formula: String.raw`\displaystyle\int_a^b f(x)\,dx \;\approx\; \sum_{i=1}^{n} f(x_i^*)\,\Delta x`,
+    desc: 'Approximate definite integrals with Left, Right, Midpoint, or Trapezoid rectangles. Watch the error shrink as n → ∞.',
+  },
+  {
+    href: '/partial-derivatives',
+    accent: '#3b82f6',
+    tag: 'Multivariable Calculus',
+    title: 'Partial Derivatives & Gradient',
+    formula: String.raw`\nabla f = \left(\dfrac{\partial f}{\partial x},\;\dfrac{\partial f}{\partial y}\right)`,
+    desc: 'Visualize a 2D function as a 3D surface, explore gradient field arrows, and trace gradient ascent paths.',
+  },
+  {
+    href: '/integration-by-parts',
+    accent: '#7c3aed',
+    tag: 'Integration Technique',
+    title: 'Integration by Parts',
+    formula: String.raw`\int u\,dv \;=\; uv \;-\; \int v\,du`,
+    desc: 'See the geometric interpretation in the u–v plane. The rectangle area splits into two complementary regions.',
+  },
+  {
+    href: '/substitution',
+    accent: '#d97706',
+    tag: 'Integration Technique',
+    title: 'u-Substitution',
+    formula: String.raw`\int f(g(x))\,g'(x)\,dx \;=\; \int f(u)\,du`,
+    desc: 'Watch how substituting u = g(x) transforms the original integral into a simpler one, strip by strip.',
+  },
+  {
+    href: '/lagrange-multipliers',
+    accent: '#ef4444',
+    tag: 'Optimization',
+    title: 'Lagrange Multipliers',
+    formula: String.raw`\nabla f \;=\; \lambda\,\nabla g \quad\text{s.t.}\quad g = c`,
+    desc: 'Optimize a function on a constraint curve. See level sets, gradient vectors, and the λ alignment condition.',
+  },
+  {
+    href: '/linear-ode',
+    accent: '#0891b2',
+    tag: 'Differential Equations',
+    title: 'Linear ODE & Integrating Factor',
+    formula: String.raw`y' + P(x)\,y = Q(x), \quad \mu = e^{\int P\,dx}`,
+    desc: 'Solve first-order linear ODEs with the integrating factor method. Visualize the solution family.',
+  },
+  {
+    href: '/leibniz',
+    accent: '#6b7280',
+    tag: 'Advanced Integration',
+    title: 'Leibniz Integral Rule',
+    formula: String.raw`\frac{d}{dt}\!\int_{a(t)}^{b(t)}\! f\,dx \;=\; f(b)\,b' - f(a)\,a' + \int_{\!a}^{b}\!\frac{\partial f}{\partial t}\,dx`,
+    desc: 'Differentiate under the integral sign with moving bounds. Decompose d/dt I(t) into its three components.',
+  },
+];
+
+const grid = document.getElementById('grid');
+topics.forEach(t => {
+  const card = document.createElement('a');
+  card.className = 'card';
+  card.href = t.href;
+  card.style.setProperty('--accent-color', t.accent);
+  const fid = 'f-' + t.href.replace('/', '');
+  card.innerHTML = `
+    <span class="card-tag">${t.tag}</span>
+    <h2>${t.title}</h2>
+    <div class="card-formula" id="${fid}"></div>
+    <p>${t.desc}</p>
+    <span class="card-arrow">Open →</span>
+  `;
+  grid.appendChild(card);
+  rk(card.querySelector('.card-formula'), t.formula);
+});
+</script>
+{% endblock %}

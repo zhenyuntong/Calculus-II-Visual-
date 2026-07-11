@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+{% block title %}Leibniz Integral Rule{% endblock %}
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<style>
+body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
+.layout{display:grid;grid-template-columns:260px 1fr;gap:10px;flex:1;min-height:0;}
+.right-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
+.canvas-wrap{flex:1;min-height:340px;}
+.t-wrap{flex:1;display:flex;align-items:center;gap:8px;}
+.t-label{font-size:0.78rem;color:var(--text-3);white-space:nowrap;}
+.t-val{font-size:0.82rem;color:var(--accent);font-family:'JetBrains Mono',monospace;width:3em;font-weight:500;}
+.breakdown{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;}
+.decomp-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);border:1px solid var(--border-soft);margin-bottom:6px;}
+.dc{width:10px;height:28px;border-radius:3px;flex-shrink:0;}
+.dl{font-size:0.72rem;color:var(--text-2);flex:1;}
+.dv{font-family:'JetBrains Mono',monospace;font-size:0.82rem;font-weight:600;min-width:80px;text-align:right;}
+@media(max-width:860px){.layout{grid-template-columns:1fr;}}
+</style>
+{% endblock %}
+
+{% block body %}
+<a class="back-link" href="/">← Menu</a>
+<header>
+  <h1>Leibniz Integral Rule</h1>
+  <div class="formula-strip">
+    <div class="formula-card" style="font-size:0.78em"><span id="hdr-lei"></span></div>
+  </div>
+</header>
+<details class="explain">
+  <summary><span class="ex-tag">LEARN</span>&nbsp; Leibniz Rule — differentiating under the integral sign <span class="ex-chev">▶</span></summary>
+  <div class="explain-body">
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--blue)">The Three Pieces</div>
+      <div class="ex-fbox">
+        d/dt ∫[a(t)]^[b(t)] f(x,t) dx =<br>
+        &nbsp;&nbsp;<span style="color:#d97706"><b>f(b(t),t)·b′(t)</b></span> — upper bound sweeping<br>
+        &nbsp;&nbsp;<span style="color:#ef4444"><b>−f(a(t),t)·a′(t)</b></span> — lower bound sweeping<br>
+        &nbsp;&nbsp;<span style="color:#3b82f6"><b>+∫[a]^[b] ∂f/∂t dx</b></span> — integrand changing
+      </div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--accent)">When ∂f/∂t = 0</div>
+      <p class="ex-text">If f doesn't depend on t, the blue term vanishes and you just get f(b)·b′ − f(a)·a′ — this is the Fundamental Theorem of Calculus!</p>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--purple)">Try This</div>
+      <div class="ex-tip">Drag the t slider. Orange = area I(t). Watch which term dominates as bounds move and integrand changes.</div>
+    </div>
+  </div>
+</details>
+<div class="layout">
+  <div class="panel">
+    <div class="sec-label">Integrand f(x, t) =</div>
+    <div class="field">
+      <input type="text" id="inp-f" value="sin(x*t)" autocomplete="off" spellcheck="false">
+      <div class="sym-bar" data-target="inp-f">
+        <button class="sym" data-ins="sin(x*t)">sin(xt)</button>
+        <button class="sym" data-ins="exp(-x*t)">e^(-xt)</button>
+        <button class="sym" data-ins="x^2*t">x²t</button>
+        <button class="sym" data-ins="t*cos(x)">t·cos</button>
+      </div>
+    </div>
+    <div class="field"><label>a(t) = lower bound</label><input type="text" id="inp-a" value="0" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label>b(t) = upper bound</label><input type="text" id="inp-b" value="t" autocomplete="off" spellcheck="false"></div>
+    <div class="row2">
+      <div class="field"><label>t range min</label><input type="number" id="inp-tmin" value="0.1" step="0.1"></div>
+      <div class="field"><label>t range max</label><input type="number" id="inp-tmax" value="3" step="0.1"></div>
+    </div>
+    <div class="err-msg" id="err"></div>
+    <button class="apply-btn" id="btn-apply">Apply ↵</button>
+    <hr>
+    <div class="sec-label">Presets</div>
+    <button class="preset-btn" data-f="sin(x*t)" data-a="0" data-b="t" data-tmin="0.1" data-tmax="3"><span class="preset-main">∫₀ᵗ sin(xt) dx</span><span class="preset-sub">Moving bound, t-varying integrand</span></button>
+    <button class="preset-btn" data-f="exp(-x*t)" data-a="0" data-b="1" data-tmin="0.1" data-tmax="4"><span class="preset-main">∫₀¹ e^(-xt) dx</span><span class="preset-sub">Fixed bounds, ∂f/∂t dominates</span></button>
+    <button class="preset-btn" data-f="x^2" data-a="0" data-b="t" data-tmin="0.1" data-tmax="3"><span class="preset-main">∫₀ᵗ x² dx = t³/3</span><span class="preset-sub">FTC: d/dt[t³/3] = t²</span></button>
+    <button class="preset-btn" data-f="t*cos(x)" data-a="0" data-b="3.14159" data-tmin="0.5" data-tmax="3"><span class="preset-main">∫₀^π t·cos(x) dx</span><span class="preset-sub">Linearly scaled integrand</span></button>
+    <button class="preset-btn" data-f="sin(x*t)" data-a="t" data-b="2*t" data-tmin="0.2" data-tmax="2"><span class="preset-main">∫ₜ^{2t} sin(xt) dx</span><span class="preset-sub">Both bounds move</span></button>
+  </div>
+  <div class="right-col">
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-play">▶ Animate t</button>
+      <button class="ctrl-btn" id="btn-reset">↺ Reset</button>
+      <div class="t-wrap">
+        <span class="t-label">t =</span>
+        <input type="range" id="t-slider" min="0.1" max="3" step="0.01" value="1">
+        <span class="t-val" id="t-val">1.00</span>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="cwrap"><canvas id="plot"></canvas></div>
+    <div class="breakdown">
+      <div class="sec-label">Decomposition of dI/dt at current t</div>
+      <div class="decomp-row">
+        <div class="dc" style="background:rgba(217,119,6,0.65)"></div>
+        <div class="dl"><span id="lbl-upper"></span> — upper bound term f(b)·b′</div>
+        <div class="dv" id="dv-upper" style="color:#d97706">—</div>
+      </div>
+      <div class="decomp-row">
+        <div class="dc" style="background:rgba(239,68,68,0.65)"></div>
+        <div class="dl"><span id="lbl-lower"></span> — lower bound term −f(a)·a′</div>
+        <div class="dv" id="dv-lower" style="color:#ef4444">—</div>
+      </div>
+      <div class="decomp-row">
+        <div class="dc" style="background:rgba(59,130,246,0.65)"></div>
+        <div class="dl">∫∂f/∂t dx — integrand change</div>
+        <div class="dv" id="dv-integ" style="color:#3b82f6">—</div>
+      </div>
+      <div class="decomp-row" style="border-color:var(--accent);background:var(--accent-glow)">
+        <div class="dc" style="background:rgba(16,163,127,0.65)"></div>
+        <div class="dl"><b>Total dI/dt</b></div>
+        <div class="dv" id="dv-total" style="color:var(--accent)">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="steps-panel">
+  <div class="steps-head">
+    <span class="steps-tag">SYMBOLIC STEPS</span>
+    <span class="steps-title">Leibniz Rule — SymPy step by step</span>
+    <span class="steps-loading" id="steps-loading"></span>
+  </div>
+  <div class="steps-list" id="steps-list"></div>
+</div>
+
+<script>
+const rk=(el,tex)=>el&&katex.render(tex,el,{throwOnError:false,displayMode:false});
+rk(document.getElementById('hdr-lei'),
+  String.raw`\frac{d}{dt}\!\int_{a(t)}^{b(t)}\!f(x,t)\,dx = f(b,t)\,b' - f(a,t)\,a' + \int_a^b\!\frac{\partial f}{\partial t}\,dx`);
+rk(document.getElementById('lbl-upper'),String.raw`f(b(t),t)\cdot b'(t)`);
+rk(document.getElementById('lbl-lower'),String.raw`-f(a(t),t)\cdot a'(t)`);
+
+document.querySelectorAll('.sym-bar').forEach(bar=>{
+  const tid=bar.dataset.target;
+  bar.querySelectorAll('.sym').forEach(btn=>{
+    btn.addEventListener('mousedown',e=>{
+      e.preventDefault();const inp=document.getElementById(tid);inp.focus();
+      const s=inp.selectionStart,end=inp.selectionEnd,ins=btn.dataset.ins;
+      inp.value=inp.value.slice(0,s)+ins+inp.value.slice(end);
+      inp.selectionStart=inp.selectionEnd=s+ins.length;
+    });
+  });
+});
+
+const H=1e-4,DPR=window.devicePixelRatio||1;
+let fC=null,aC=null,bC=null,tCur=1,tMin=0.1,tMax=3,playing=false,animId=null,animDir=1;
+
+function sf(fn,x,t){try{const v=fn({x,t});return isFinite(v)?v:NaN;}catch{return NaN;}}
+function sfT(fn,t){try{const v=fn({t});return isFinite(v)?v:NaN;}catch{return NaN;}}
+function integrateXT(fn,a,b,t,n=300){
+  if(!isFinite(a)||!isFinite(b))return NaN;if(Math.abs(b-a)<1e-14)return 0;
+  const sign=b<a?-1:1;if(sign<0)[a,b]=[b,a];const h=(b-a)/n;let s=0;
+  for(let i=0;i<n;i++){const x=a+(i+0.5)*h;const v=sf(fn,x,t);s+=(isFinite(v)?v:0);}
+  return sign*s*h;
+}
+function ddt_numeric(fn,t){return(fn(t+H)-fn(t-H))/(2*H);}
+
+function computeDecomp(t){
+  const at=sfT(aC,t),bt=sfT(bC,t);
+  if(!isFinite(at)||!isFinite(bt))return null;
+  const fat=sf(fC,at,t),fbt=sf(fC,bt,t);
+  const ap=ddt_numeric(tt=>sfT(aC,tt),t);
+  const bp=ddt_numeric(tt=>sfT(bC,tt),t);
+  const upper=isFinite(fbt)&&isFinite(bp)?fbt*bp:NaN;
+  const lower=isFinite(fat)&&isFinite(ap)?-fat*ap:NaN;
+  const dfdtFn=(xx,tt)=>(sf(fC,xx,tt+H)-sf(fC,xx,tt-H))/(2*H);
+  const integ=integrateXT({evaluate:scope=>dfdtFn(scope.x,scope.t)},at,bt,t,200);
+  const total=(isFinite(upper)?upper:0)+(isFinite(lower)?lower:0)+(isFinite(integ)?integ:0);
+  return{upper,lower,integ,total,at,bt};
+}
+
+function drawPlot(t){
+  if(!fC||!aC||!bC)return;
+  const wrap=document.getElementById('cwrap');
+  const cw=wrap.clientWidth,ch=wrap.clientHeight;
+  const canvas=document.getElementById('plot');
+  canvas.width=cw*DPR;canvas.height=ch*DPR;canvas.style.width=cw+'px';canvas.style.height=ch+'px';
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,Hc=canvas.height,pad=Math.round(50*DPR);
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,Hc);
+
+  const at=sfT(aC,t),bt=sfT(bC,t);
+  if(!isFinite(at)||!isFinite(bt))return;
+  const xMin=Math.min(at,bt)-1,xMax=Math.max(at,bt)+1;
+  const N=200;const xs=Array.from({length:N},(_,i)=>xMin+(xMax-xMin)*i/(N-1));
+  const ys=xs.map(x=>sf(fC,x,t));
+  const valid=ys.filter(isFinite);if(!valid.length)return;
+  let yMin=Math.min(0,...valid),yMax=Math.max(0,...valid);
+  const yPad=(yMax-yMin)*0.3;yMin-=yPad;yMax+=yPad;if(yMax-yMin<0.5){yMin-=0.5;yMax+=0.5;}
+  const ppx=x=>pad+(x-xMin)/(xMax-xMin)*(W-2*pad);
+  const ppy=y=>Hc-pad-(y-yMin)/(yMax-yMin)*(Hc-2*pad);
+
+  ctx.strokeStyle='#f5f5f5';ctx.lineWidth=1;
+  for(let i=Math.ceil(xMin);i<=xMax;i++){ctx.beginPath();ctx.moveTo(ppx(i),pad);ctx.lineTo(ppx(i),Hc-pad);ctx.stroke();}
+  for(let i=Math.ceil(yMin);i<=yMax;i++){ctx.beginPath();ctx.moveTo(pad,ppy(i));ctx.lineTo(W-pad,ppy(i));ctx.stroke();}
+  ctx.strokeStyle='#e5e7eb';ctx.lineWidth=1.2;
+  if(0>=xMin&&0<=xMax){ctx.beginPath();ctx.moveTo(ppx(0),pad);ctx.lineTo(ppx(0),Hc-pad);ctx.stroke();}
+  if(0>=yMin&&0<=yMax){ctx.beginPath();ctx.moveTo(pad,ppy(0));ctx.lineTo(W-pad,ppy(0));ctx.stroke();}
+
+  const a_=Math.min(at,bt),b_=Math.max(at,bt);
+  ctx.beginPath();ctx.moveTo(ppx(a_),ppy(0));
+  xs.forEach((x,k)=>{if(x<a_||x>b_)return;if(!isFinite(ys[k]))return;ctx.lineTo(ppx(x),ppy(ys[k]));});
+  ctx.lineTo(ppx(b_),ppy(0));ctx.closePath();
+  ctx.fillStyle='rgba(16,163,127,0.15)';ctx.fill();
+
+  ctx.beginPath();let pen=false;
+  xs.forEach((x,k)=>{const v=ys[k];if(!isFinite(v)||v<yMin-1||v>yMax+1){pen=false;return;}if(!pen){ctx.moveTo(ppx(x),ppy(v));pen=true;}else ctx.lineTo(ppx(x),ppy(v));});
+  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2.5*DPR;ctx.stroke();
+
+  [[at,'#ef4444','a(t)'],[bt,'#d97706','b(t)']].forEach(([xv,col,lbl])=>{
+    if(!isFinite(xv))return;const yv=sf(fC,xv,t);
+    ctx.beginPath();ctx.moveTo(ppx(xv),ppy(0));ctx.lineTo(ppx(xv),isFinite(yv)?ppy(yv):pad);
+    ctx.strokeStyle=col;ctx.lineWidth=2*DPR;ctx.setLineDash([5*DPR,3*DPR]);ctx.stroke();ctx.setLineDash([]);
+    if(isFinite(yv)){ctx.beginPath();ctx.arc(ppx(xv),ppy(yv),5*DPR,0,2*Math.PI);ctx.fillStyle=col;ctx.fill();}
+    ctx.fillStyle=col;ctx.font=`bold ${Math.round(11*DPR)}px system-ui`;ctx.textAlign='center';
+    ctx.fillText(lbl,ppx(xv),Hc-pad+Math.round(20*DPR));
+  });
+
+  ctx.fillStyle='#9ca3af';ctx.font=`${Math.round(10*DPR)}px system-ui`;ctx.textAlign='center';
+  for(let i=Math.ceil(xMin);i<=xMax;i++){ctx.fillText(i,ppx(i),Hc-pad+Math.round(34*DPR));}
+  ctx.textAlign='right';for(let i=Math.ceil(yMin);i<=yMax;i++){if(i%1===0)ctx.fillText(i.toFixed(1),pad-6,ppy(i)+4);}
+  ctx.textAlign='center';ctx.fillText('x',W-pad+Math.round(14*DPR),Hc-pad+4);
+  ctx.fillText('f(x,t)',pad,pad-10);ctx.fillText(`t = ${t.toFixed(3)}`,W/2,pad-10);
+
+  const I=integrateXT(fC,at,bt,t,300);
+  if(isFinite(I)){
+    ctx.fillStyle='rgba(16,163,127,0.9)';ctx.font=`bold ${Math.round(11*DPR)}px system-ui`;ctx.textAlign='left';
+    ctx.fillText(`I(t) = ${I.toFixed(5)}`,pad+8*DPR,pad+18*DPR);
+  }
+}
+
+function updateDecomp(t){
+  const d=computeDecomp(t);
+  const fmt=v=>isFinite(v)?v.toFixed(5):'N/A';
+  document.getElementById('dv-upper').textContent=d?fmt(d.upper):'N/A';
+  document.getElementById('dv-lower').textContent=d?fmt(d.lower):'N/A';
+  document.getElementById('dv-integ').textContent=d?fmt(d.integ):'N/A';
+  document.getElementById('dv-total').textContent=d?fmt(d.total):'N/A';
+}
+
+function refresh(t){drawPlot(t);updateDecomp(t);}
+
+function renderSteps(steps){
+  const list=document.getElementById('steps-list');list.innerHTML='';
+  steps.forEach((step,i)=>{
+    const div=document.createElement('div');div.className='step-item';
+    div.innerHTML=`<div class="step-num" style="color:${step.color};border-color:${step.color}44">${i+1}</div><div class="step-body"><div class="step-katex"></div><div class="step-desc">${step.desc}</div></div><div class="step-val" style="color:${step.color}">${step.val||''}</div>`;
+    try{katex.render(step.latex,div.querySelector('.step-katex'),{throwOnError:false,displayMode:false});}catch(e){}
+    list.appendChild(div);
+  });
+}
+async function fetchSteps(){
+  const loading=document.getElementById('steps-loading');loading.textContent='Computing…';
+  const fRaw=document.getElementById('inp-f').value.trim();
+  const aRaw=document.getElementById('inp-a').value.trim();
+  const bRaw=document.getElementById('inp-b').value.trim();
+  const t0=parseFloat(document.getElementById('inp-tmin').value)||0.1;
+  try{
+    const res=await fetch('/api/leibniz',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({f:fRaw.replace(/\^/g,'**'),a:aRaw.replace(/\^/g,'**'),b:bRaw.replace(/\^/g,'**'),t0})});
+    const data=await res.json();renderSteps(data.steps);loading.textContent='';
+  }catch(e){loading.textContent='(steps unavailable)';}
+}
+
+function applyFn(){
+  const fRaw=document.getElementById('inp-f').value.trim();
+  const aRaw=document.getElementById('inp-a').value.trim();
+  const bRaw=document.getElementById('inp-b').value.trim();
+  tMin=parseFloat(document.getElementById('inp-tmin').value)||0.1;
+  tMax=parseFloat(document.getElementById('inp-tmax').value)||3;
+  const errEl=document.getElementById('err');errEl.textContent='';
+  let fc,ac,bc;
+  try{fc=math.compile(fRaw);fc.evaluate({x:1,t:1});}catch(e){errEl.textContent='f: '+e.message;return;}
+  try{ac=math.compile(aRaw);ac.evaluate({t:1});}catch(e){errEl.textContent='a: '+e.message;return;}
+  try{bc=math.compile(bRaw);bc.evaluate({t:1});}catch(e){errEl.textContent='b: '+e.message;return;}
+  fC=ac.evaluate?{evaluate:scope=>fc.evaluate(scope)}:null;
+  fC=scope=>fc.evaluate(scope);
+  aC=scope=>ac.evaluate(scope);
+  bC=scope=>bc.evaluate(scope);
+  const slider=document.getElementById('t-slider');
+  slider.min=tMin;slider.max=tMax;slider.step=(tMax-tMin)/300;
+  tCur=Math.max(tMin,Math.min(tMax,(tMin+tMax)/2));
+  slider.value=tCur;document.getElementById('t-val').textContent=tCur.toFixed(2);
+  refresh(tCur);fetchSteps();
+}
+
+document.getElementById('btn-apply').addEventListener('click',applyFn);
+document.getElementById('inp-f').addEventListener('keydown',e=>{if(e.key==='Enter')applyFn();});
+document.getElementById('t-slider').addEventListener('input',e=>{
+  tCur=parseFloat(e.target.value);document.getElementById('t-val').textContent=tCur.toFixed(2);
+  if(!playing)refresh(tCur);
+});
+
+let animT=tMin,animDir2=1;
+document.getElementById('btn-play').addEventListener('click',function(){
+  playing=!playing;this.textContent=playing?'⏸ Pause':'▶ Animate t';
+  this.classList.toggle('active',playing);if(playing){animT=tCur;requestAnimationFrame(anim);}
+});
+function anim(){
+  if(!playing)return;const spd=(tMax-tMin)*0.007;
+  animT+=spd*animDir2;if(animT>=tMax){animT=tMax;animDir2=-1;}if(animT<=tMin){animT=tMin;animDir2=1;}
+  tCur=animT;document.getElementById('t-slider').value=animT;document.getElementById('t-val').textContent=animT.toFixed(2);
+  refresh(tCur);animId=requestAnimationFrame(anim);
+}
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  playing=false;cancelAnimationFrame(animId);document.getElementById('btn-play').textContent='▶ Animate t';document.getElementById('btn-play').classList.remove('active');
+  tCur=(tMin+tMax)/2;document.getElementById('t-slider').value=tCur;document.getElementById('t-val').textContent=tCur.toFixed(2);refresh(tCur);
+});
+document.querySelectorAll('.preset-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.getElementById('inp-f').value=btn.dataset.f;document.getElementById('inp-a').value=btn.dataset.a;
+    document.getElementById('inp-b').value=btn.dataset.b;document.getElementById('inp-tmin').value=btn.dataset.tmin;
+    document.getElementById('inp-tmax').value=btn.dataset.tmax;applyFn();
+  });
+});
+const ro=new ResizeObserver(()=>{if(fC)refresh(tCur);});
+ro.observe(document.getElementById('cwrap'));
+applyFn();
+</script>
+{% endblock %}

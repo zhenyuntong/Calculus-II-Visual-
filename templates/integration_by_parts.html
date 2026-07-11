@@ -1,0 +1,385 @@
+{% extends 'base.html' %}
+{% block title %}Integration by Parts{% endblock %}
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<style>
+body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
+.layout{display:grid;grid-template-columns:260px 1fr;gap:10px;flex:1;min-height:0;}
+.right-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
+.canvas-wrap{flex:1;min-height:300px;}
+.t-wrap{flex:1;display:flex;align-items:center;gap:8px;min-width:120px;}
+.t-label{font-size:0.78rem;color:var(--text-3);white-space:nowrap;}
+.t-val{font-size:0.82rem;color:var(--accent);font-family:'JetBrains Mono',monospace;width:3.5em;font-weight:500;}
+.breakdown{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;}
+.formula-steps{display:flex;flex-direction:column;gap:8px;}
+.step-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-sm);border:1px solid var(--border-soft);}
+.step-color{width:10px;height:32px;border-radius:3px;flex-shrink:0;}
+.step-label{font-size:0.73rem;color:var(--text-2);flex:1;}
+.step-vval{font-size:0.9rem;font-weight:600;font-family:'JetBrains Mono',monospace;text-align:right;min-width:80px;}
+.mode-row{display:flex;gap:6px;flex-wrap:wrap;}
+.formula-mini{border:1px solid var(--border);background:var(--surface);border-radius:var(--r);padding:9px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.formula-mini .tag{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);}
+@media(max-width:860px){.layout{grid-template-columns:1fr;}}
+</style>
+{% endblock %}
+
+{% block body %}
+<a class="back-link" href="/">← Menu</a>
+<header>
+  <h1>Integration by Parts</h1>
+  <div class="formula-strip"><div class="formula-card"><span id="hdr-formula"></span></div></div>
+</header>
+<details class="explain">
+  <summary><span class="ex-tag">LEARN</span>&nbsp; Integration by Parts — trading one hard integral for an easier one <span class="ex-chev">▶</span></summary>
+  <div class="explain-body">
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--amber)">The Idea</div>
+      <p class="ex-text">The product rule says <b>d(uv)/dx = u·v′ + v·u′.</b> Rearranging and integrating gives <b>∫u·v′dx = uv − ∫v·u′dx.</b> It works because the total change in the product uv can be split into the part caused by v changing and the part caused by u changing.</p>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--blue)">Formula Decoded</div>
+      <div class="ex-fbox">
+        Original function: <span class="hb">h(x)=u(x)v′(x)</span><br>
+        <span class="hb">∫u dv</span> = <span class="hg">[u·v]ₐᵇ</span> − <span class="hp">∫v du</span><br>
+        <span class="hg">[u·v]ₐᵇ</span> ← boundary term<br>
+        <span class="hp">∫v du</span> ← remainder (hopefully easier)<br>
+        <b>LIATE rule:</b> Log, Inv-trig, Algebraic, Trig, Exp
+      </div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--accent)">Try This</div>
+      <div class="ex-tip"><b>Switch to "u–v plane".</b> Green + purple areas = rectangle [u·v]. That's the geometric proof.</div>
+      <div class="ex-tip"><b>Load "ln(x)·1".</b> IBP with u=ln(x), dv=dx gives ∫ln(x)dx = x·ln(x) − x.</div>
+    </div>
+    <div class="ex-card">
+      <div class="ex-head" style="color:var(--purple)">Key Insight</div>
+      <p class="ex-text">The u–v plane picture is the real proof: two areas tile a rectangle. <b>∫u dv + ∫v du = uv.</b></p>
+    </div>
+  </div>
+</details>
+<div class="layout">
+  <div class="panel">
+    <div class="sec-label">Choose u and v′</div>
+    <div class="field">
+      <label>u(x) =</label>
+      <input type="text" id="inp-u" value="x" autocomplete="off" spellcheck="false">
+      <div class="sym-bar" data-target="inp-u">
+        <button class="sym" data-ins="x">x</button><button class="sym" data-ins="x^2">x²</button>
+        <button class="sym" data-ins="log(x)">ln</button><button class="sym" data-ins="sin(x)">sin</button>
+        <button class="sym" data-ins="cos(x)">cos</button><button class="sym" data-ins="exp(x)">eˣ</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>v′(x) = dv/dx =</label>
+      <input type="text" id="inp-vp" value="cos(x)" autocomplete="off" spellcheck="false">
+      <div class="sym-bar" data-target="inp-vp">
+        <button class="sym" data-ins="sin(x)">sin</button><button class="sym" data-ins="cos(x)">cos</button>
+        <button class="sym" data-ins="exp(x)">eˣ</button><button class="sym" data-ins="1/x">1/x</button>
+        <button class="sym" data-ins="x">x</button><button class="sym" data-ins="1">1</button>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>a</label><input type="number" id="inp-a" value="0" step="0.5"></div>
+      <div class="field"><label>b</label><input type="number" id="inp-b" value="3.14159" step="0.5"></div>
+    </div>
+    <div class="err-msg" id="err"></div>
+    <button class="apply-btn" id="btn-apply">Apply ↵</button>
+    <hr>
+    <div class="sec-label">Visualization Mode</div>
+    <div class="mode-row">
+      <button class="ctrl-btn active" data-mode="uv" id="mode-uv">u–v plane</button>
+      <button class="ctrl-btn" data-mode="x" id="mode-x">x domain</button>
+    </div>
+    <hr>
+    <div class="sec-label">Presets</div>
+    <button class="preset-btn" data-u="x" data-vp="cos(x)" data-a="0" data-b="3.14159"><span class="preset-main">x · cos(x)</span><span class="preset-sub">u=x, v′=cos(x), [0,π]</span></button>
+    <button class="preset-btn" data-u="log(x)" data-vp="1" data-a="1" data-b="3"><span class="preset-main">ln(x) · 1</span><span class="preset-sub">u=ln x, v′=1, [1,3]</span></button>
+    <button class="preset-btn" data-u="x^2" data-vp="exp(x)" data-a="0" data-b="2"><span class="preset-main">x² · eˣ</span><span class="preset-sub">u=x², v′=eˣ, [0,2]</span></button>
+    <button class="preset-btn" data-u="x" data-vp="exp(-x)" data-a="0" data-b="3"><span class="preset-main">x · e⁻ˣ</span><span class="preset-sub">u=x, v′=e⁻ˣ, [0,3]</span></button>
+    <button class="preset-btn" data-u="x" data-vp="sin(x)" data-a="0" data-b="3.14159"><span class="preset-main">x · sin(x)</span><span class="preset-sub">u=x, v′=sin(x), [0,π]</span></button>
+  </div>
+  <div class="right-col">
+    <div class="formula-mini"><span class="tag">Original function</span><span id="live-orig"></span><span class="tag">Remainder</span><span id="live-rem"></span></div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" id="btn-play">▶ Animate</button>
+      <button class="ctrl-btn" id="btn-reset">↺ Reset</button>
+      <div class="t-wrap">
+        <span class="t-label">t =</span>
+        <input type="range" id="t-slider" min="0" max="1" step="0.002" value="1">
+        <span class="t-val" id="t-val">1.00</span>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="cwrap"><canvas id="plot"></canvas></div>
+    <div class="breakdown">
+      <div class="sec-label">Decomposition at current t</div>
+      <div class="formula-steps">
+        <div class="step-row">
+          <div class="step-color" style="background:rgba(16,163,127,0.65)"></div>
+          <div class="step-label"><span id="lbl-uvb"></span> — boundary term [u·v]</div>
+          <div class="step-vval" id="sv-uv" style="color:var(--accent)">—</div>
+        </div>
+        <div class="step-row">
+          <div class="step-color" style="background:rgba(124,58,237,0.65)"></div>
+          <div class="step-label"><span id="lbl-rem"></span> — remainder ∫v·u′ dx</div>
+          <div class="step-vval" id="sv-rem" style="color:var(--purple)">—</div>
+        </div>
+        <div class="step-row">
+          <div class="step-color" style="background:rgba(59,130,246,0.65)"></div>
+          <div class="step-label">∫u·v′ dx — original integral</div>
+          <div class="step-vval" id="sv-orig" style="color:var(--blue)">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="steps-panel">
+  <div class="steps-head">
+    <span class="steps-tag">SYMBOLIC STEPS</span>
+    <span class="steps-title">Integration by Parts — SymPy step by step</span>
+    <span class="steps-loading" id="steps-loading"></span>
+  </div>
+  <div class="steps-list" id="steps-list"></div>
+</div>
+
+<script>
+const rk=(el,tex)=>el&&katex.render(tex,el,{throwOnError:false,displayMode:false});
+rk(document.getElementById('hdr-formula'),
+  String.raw`\int u\,dv = \Big[u\cdot v\Big]_a^b - \int_a^b v\cdot u'\,dx`);
+
+document.querySelectorAll('.sym-bar').forEach(bar=>{
+  const tid=bar.dataset.target;
+  bar.querySelectorAll('.sym').forEach(btn=>{
+    btn.addEventListener('mousedown',e=>{
+      e.preventDefault();const inp=document.getElementById(tid);inp.focus();
+      const s=inp.selectionStart,end=inp.selectionEnd,ins=btn.dataset.ins;
+      inp.value=inp.value.slice(0,s)+ins+inp.value.slice(end);
+      inp.selectionStart=inp.selectionEnd=s+ins.length;
+    });
+  });
+});
+
+const S={uFn:null,vpFn:null,vFn:null,upFn:null,a:0,b:Math.PI,t:1,playing:false,animId:null,mode:'uv'};
+const H=1e-5,DPR=window.devicePixelRatio||1;
+function sf(fn,x){try{const v=fn({x});return isFinite(v)?v:NaN;}catch{return NaN;}}
+function integrate(fn,a,b,n=400){
+  if(Math.abs(b-a)<1e-12)return 0;const sign=b<a?-1:1;if(sign<0)[a,b]=[b,a];
+  if(n%2!==0)n++;const h=(b-a)/n;let s=sf(fn,a)+sf(fn,b);
+  for(let i=1;i<n;i++){const v=sf(fn,a+i*h);s+=(i%2===0?2:4)*(isFinite(v)?v:0);}
+  return sign*s*h/3;
+}
+function buildV(vpFn,a,b){
+  const N=500;const dx=(b-a)/N;const vs=[0];
+  for(let i=0;i<N;i++){const x=a+i*dx;const mid=x+dx/2;const v=sf(vpFn,mid)*dx;vs.push(vs[vs.length-1]+(isFinite(v)?v:0));}
+  return x=>{if(x<=a)return 0;if(x>=b)return vs[N];const i=Math.min(N-1,Math.floor((x-a)/dx));const t=(x-a)/dx-i;return vs[i]*(1-t)+vs[Math.min(N,i+1)]*t;};
+}
+
+function drawUVPlane(){
+  const wrap=document.getElementById('cwrap');
+  const cw=wrap.clientWidth,ch=wrap.clientHeight;
+  const canvas=document.getElementById('plot');
+  canvas.width=cw*DPR;canvas.height=ch*DPR;canvas.style.width=cw+'px';canvas.style.height=ch+'px';
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,Hc=canvas.height,pad=Math.round(50*DPR);
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,Hc);
+  const {a,b,uFn,vFn,t}=S;const bx=a+(b-a)*t;
+  const N=300;
+  const ts=Array.from({length:N},(_,i)=>a+(bx-a)*i/(N-1));
+  const us=ts.map(x=>sf(uFn,x));
+  const vs=ts.map(x=>vFn(x)-vFn(a));
+  const valid_u=us.filter(isFinite),valid_v=vs.filter(isFinite);if(!valid_u.length)return;
+  let uMin=Math.min(0,...valid_u),uMax=Math.max(0,...valid_u);
+  let vMin=Math.min(0,...valid_v),vMax=Math.max(0,...valid_v);
+  const up=(uMax-uMin)*0.18,vp=(vMax-vMin)*0.18;
+  uMin-=up;uMax+=up;vMin-=vp;vMax+=vp;
+  if(uMax===uMin){uMax+=1;uMin-=1;}if(vMax===vMin){vMax+=1;vMin-=1;}
+  const px=(u)=>pad+(u-uMin)/(uMax-uMin)*(W-2*pad);
+  const py=(v)=>Hc-pad-(v-vMin)/(vMax-vMin)*(Hc-2*pad);
+  ctx.strokeStyle='#f5f5f5';ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){
+    const gu=uMin+(uMax-uMin)*i/5,gv=vMin+(vMax-vMin)*i/5;
+    ctx.beginPath();ctx.moveTo(px(gu),pad);ctx.lineTo(px(gu),Hc-pad);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(pad,py(gv));ctx.lineTo(W-pad,py(gv));ctx.stroke();
+  }
+  ctx.strokeStyle='#e5e7eb';ctx.lineWidth=1.2;
+  if(0>=uMin&&0<=uMax){ctx.beginPath();ctx.moveTo(px(0),pad);ctx.lineTo(px(0),Hc-pad);ctx.stroke();}
+  if(0>=vMin&&0<=vMax){ctx.beginPath();ctx.moveTo(pad,py(0));ctx.lineTo(W-pad,py(0));ctx.stroke();}
+  const tsAll=Array.from({length:300},(_,i)=>a+(b-a)*i/299);
+  const usAll=tsAll.map(x=>sf(uFn,x));const vsAll=tsAll.map(x=>vFn(x)-vFn(a));
+  ctx.beginPath();let pen=false;
+  for(let i=0;i<300;i++){if(!isFinite(usAll[i])||!isFinite(vsAll[i])){pen=false;continue;}const cx=px(usAll[i]),cy=py(vsAll[i]);if(!pen){ctx.moveTo(cx,cy);pen=true;}else ctx.lineTo(cx,cy);}
+  ctx.strokeStyle='rgba(59,130,246,0.2)';ctx.lineWidth=1.5*DPR;ctx.stroke();
+  const ua=sf(uFn,a),va=vFn(a)-vFn(a),ub=sf(uFn,bx),vb=vFn(bx)-vFn(a);
+  if(ts.length>1){
+    ctx.beginPath();ctx.moveTo(px(ua),py(va));
+    for(let i=0;i<ts.length;i++){if(!isFinite(us[i])||!isFinite(vs[i]))continue;ctx.lineTo(px(us[i]),py(vs[i]));}
+    ctx.lineTo(px(ub),py(va));ctx.closePath();
+    ctx.fillStyle='rgba(124,58,237,0.15)';ctx.fill();
+    ctx.strokeStyle='rgba(124,58,237,0.4)';ctx.lineWidth=0.8*DPR;ctx.stroke();
+  }
+  if(ts.length>1){
+    ctx.beginPath();ctx.moveTo(px(ua),py(va));
+    for(let i=0;i<ts.length;i++){if(!isFinite(us[i])||!isFinite(vs[i]))continue;ctx.lineTo(px(us[i]),py(vs[i]));}
+    ctx.lineTo(px(ua),py(vb));ctx.closePath();
+    ctx.fillStyle='rgba(16,163,127,0.15)';ctx.fill();
+    ctx.strokeStyle='rgba(16,163,127,0.4)';ctx.lineWidth=0.8*DPR;ctx.stroke();
+  }
+  if(isFinite(ua)&&isFinite(ub)&&isFinite(vb)){
+    ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=1.2*DPR;ctx.setLineDash([5*DPR,3*DPR]);
+    ctx.strokeRect(px(ua),py(vb),px(ub)-px(ua),py(va)-py(vb));ctx.setLineDash([]);
+  }
+  ctx.beginPath();pen=false;
+  for(let i=0;i<ts.length;i++){if(!isFinite(us[i])||!isFinite(vs[i])){pen=false;continue;}const cx=px(us[i]),cy=py(vs[i]);if(!pen){ctx.moveTo(cx,cy);pen=true;}else ctx.lineTo(cx,cy);}
+  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2.2*DPR;ctx.stroke();
+  [[ua,va,'a'],[ub,vb,'b']].forEach(([u,v,lbl])=>{
+    if(!isFinite(u)||!isFinite(v))return;
+    ctx.beginPath();ctx.arc(px(u),py(v),5*DPR,0,2*Math.PI);
+    ctx.fillStyle=lbl==='a'?'#ef4444':'#10a37f';ctx.fill();
+    ctx.fillStyle=lbl==='a'?'#ef4444':'#10a37f';ctx.font=`bold ${Math.round(11*DPR)}px system-ui`;
+    ctx.textAlign='left';ctx.fillText(lbl,px(u)+8*DPR,py(v));
+  });
+  ctx.fillStyle='#9ca3af';ctx.font=`italic ${Math.round(11*DPR)}px system-ui`;ctx.textAlign='center';
+  ctx.fillText('u',W/2,Hc-pad+Math.round(20*DPR));
+  ctx.save();ctx.translate(Math.round(14*DPR),Hc/2);ctx.rotate(-Math.PI/2);ctx.fillText('v',0,0);ctx.restore();
+}
+
+function drawXDomain(){
+  const wrap=document.getElementById('cwrap');
+  const cw=wrap.clientWidth,ch=wrap.clientHeight;
+  const canvas=document.getElementById('plot');
+  canvas.width=cw*DPR;canvas.height=ch*DPR;canvas.style.width=cw+'px';canvas.style.height=ch+'px';
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,Hc=canvas.height,pad=Math.round(50*DPR);
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,Hc);
+  const {a,b,uFn,vpFn,vFn,upFn,t}=S;const bx=a+(b-a)*t;
+  const N=300;const xs=Array.from({length:N},(_,i)=>a+(b-a)*i/(N-1));
+  const uvp=xs.map(x=>sf(uFn,x)*sf(vpFn,x));
+  const vup=xs.map(x=>(vFn(x)-vFn(a))*upFn(x));
+  const all=[...uvp,...vup].filter(isFinite);if(!all.length)return;
+  let yMin=Math.min(0,...all),yMax=Math.max(0,...all);
+  if(yMin===yMax){yMin-=1;yMax+=1;}const yp=(yMax-yMin)*0.18;yMin-=yp;yMax+=yp;
+  const ppx=(x)=>pad+(x-a)/(b-a)*(W-2*pad);
+  const ppy=(y)=>Hc-pad-(y-yMin)/(yMax-yMin)*(Hc-2*pad);
+  ctx.strokeStyle='#f5f5f5';ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){const gy=yMin+(yMax-yMin)*i/5;const gx=a+(b-a)*i/5;ctx.beginPath();ctx.moveTo(ppx(gx),pad);ctx.lineTo(ppx(gx),Hc-pad);ctx.stroke();ctx.beginPath();ctx.moveTo(pad,ppy(gy));ctx.lineTo(W-pad,ppy(gy));ctx.stroke();}
+  ctx.strokeStyle='#e5e7eb';ctx.lineWidth=1.2;
+  if(0>=yMin&&0<=yMax){ctx.beginPath();ctx.moveTo(pad,ppy(0));ctx.lineTo(W-pad,ppy(0));ctx.stroke();}
+  const bxi=Math.floor((bx-a)/(b-a)*(N-1));
+  ctx.beginPath();ctx.moveTo(ppx(a),ppy(0));
+  for(let i=0;i<=bxi;i++){if(!isFinite(uvp[i]))continue;ctx.lineTo(ppx(xs[i]),ppy(uvp[i]));}
+  ctx.lineTo(ppx(xs[Math.min(bxi,N-1)]),ppy(0));ctx.closePath();
+  ctx.fillStyle='rgba(59,130,246,0.12)';ctx.fill();
+  ctx.beginPath();ctx.moveTo(ppx(a),ppy(0));
+  for(let i=0;i<=bxi;i++){if(!isFinite(vup[i]))continue;ctx.lineTo(ppx(xs[i]),ppy(-vup[i]));}
+  ctx.lineTo(ppx(xs[Math.min(bxi,N-1)]),ppy(0));ctx.closePath();
+  ctx.fillStyle='rgba(124,58,237,0.12)';ctx.fill();
+  [[uvp,'#3b82f6','u·v′'],[vup.map(v=>-v),'#7c3aed','-v·u′']].forEach(([ys,col,lbl])=>{
+    ctx.beginPath();let pen2=false;
+    for(let i=0;i<N;i++){if(!isFinite(ys[i])){pen2=false;continue;}if(!pen2){ctx.moveTo(ppx(xs[i]),ppy(ys[i]));pen2=true;}else ctx.lineTo(ppx(xs[i]),ppy(ys[i]));}
+    ctx.strokeStyle=col;ctx.lineWidth=2*DPR;ctx.stroke();
+  });
+  ctx.strokeStyle='rgba(217,119,6,0.6)';ctx.lineWidth=1.8*DPR;ctx.setLineDash([5*DPR,3*DPR]);
+  ctx.beginPath();ctx.moveTo(ppx(bx),pad);ctx.lineTo(ppx(bx),Hc-pad);ctx.stroke();ctx.setLineDash([]);
+}
+
+function updateBreakdown(){
+  if(!S.uFn)return;
+  const {a,b,uFn,vFn,vpFn,upFn,t}=S;const bx=a+(b-a)*t;
+  const ua=sf(uFn,a),va=vFn(a),ub=sf(uFn,bx),vb=vFn(bx);
+  const uvBoundary=(isFinite(ub)&&isFinite(vb)&&isFinite(ua)&&isFinite(va))?(ub*vb-ua*va):NaN;
+  const remFn=scope=>(vFn(scope.x)-vFn(a))*upFn(scope.x);
+  const rem=integrate(remFn,a,bx);
+  const origFn=scope=>sf(uFn,scope.x)*sf(vpFn,scope.x);
+  const orig=integrate(origFn,a,bx);
+  document.getElementById('sv-uv').textContent=isFinite(uvBoundary)?uvBoundary.toFixed(5):'N/A';
+  document.getElementById('sv-rem').textContent=isFinite(rem)?(-rem).toFixed(5):'N/A';
+  document.getElementById('sv-orig').textContent=isFinite(orig)?orig.toFixed(5):'N/A';
+}
+
+function draw(){
+  if(!S.uFn)return;
+  if(S.mode==='uv')drawUVPlane();else drawXDomain();
+  updateBreakdown();
+}
+
+function renderSteps(steps){
+  const list=document.getElementById('steps-list');list.innerHTML='';
+  steps.forEach((step,i)=>{
+    const div=document.createElement('div');div.className='step-item';
+    div.innerHTML=`<div class="step-num" style="color:${step.color};border-color:${step.color}44">${i+1}</div><div class="step-body"><div class="step-katex"></div><div class="step-desc">${step.desc}</div></div><div class="step-val" style="color:${step.color}">${step.val||''}</div>`;
+    try{katex.render(step.latex,div.querySelector('.step-katex'),{throwOnError:false,displayMode:false});}catch(e){}
+    list.appendChild(div);
+  });
+}
+async function fetchSteps(){
+  const loading=document.getElementById('steps-loading');loading.textContent='Computing…';
+  const uRaw=document.getElementById('inp-u').value.trim();
+  const vpRaw=document.getElementById('inp-vp').value.trim();
+  try{
+    const res=await fetch('/api/ibp',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({u:uRaw.replace(/\^/g,'**'),vp:vpRaw.replace(/\^/g,'**'),a:S.a,b:S.b})});
+    const data=await res.json();renderSteps(data.steps);loading.textContent='';
+  }catch(e){loading.textContent='(steps unavailable)';}
+}
+
+function applyFn(){
+  const uRaw=document.getElementById('inp-u').value.trim();
+  const vpRaw=document.getElementById('inp-vp').value.trim();
+  const a=parseFloat(document.getElementById('inp-a').value);
+  const b=parseFloat(document.getElementById('inp-b').value);
+  const errEl=document.getElementById('err');errEl.textContent='';
+  if(isNaN(a)||isNaN(b)||a>=b){errEl.textContent='a < b required';return;}
+  let uC,vpC;
+  try{uC=math.compile(uRaw);uC.evaluate({x:1});}catch(e){errEl.textContent='u: '+e.message;return;}
+  try{vpC=math.compile(vpRaw);vpC.evaluate({x:1});}catch(e){errEl.textContent="v': "+e.message;return;}
+  S.uFn=scope=>uC.evaluate(scope);S.vpFn=scope=>vpC.evaluate(scope);
+  S.vFn=buildV(S.vpFn,a,b);S.upFn=x=>(sf(S.uFn,x+H)-sf(S.uFn,x-H))/(2*H);
+  S.a=a;S.b=b;
+  const uTex=window.mathToLatex?window.mathToLatex(uRaw):uRaw;
+  const vpTex=window.mathToLatex?window.mathToLatex(vpRaw):vpRaw;
+  rk(document.getElementById('live-orig'),String.raw`h(x)=u(x)v'(x)=\left(`+uTex+String.raw`\right)\left(`+vpTex+String.raw`\right)`);
+  rk(document.getElementById('live-rem'),String.raw`\int_a^b v(x)u'(x)\,dx`);
+  rk(document.getElementById('lbl-uvb'),String.raw`[u\cdot v]_{a}^{b}`);
+  rk(document.getElementById('lbl-rem'),String.raw`-\int_a^b v\cdot u'\,dx`);
+  draw();fetchSteps();
+}
+
+document.getElementById('btn-apply').addEventListener('click',applyFn);
+document.getElementById('inp-u').addEventListener('keydown',e=>{if(e.key==='Enter')applyFn();});
+document.getElementById('t-slider').addEventListener('input',e=>{
+  S.t=parseFloat(e.target.value);document.getElementById('t-val').textContent=S.t.toFixed(2);
+  if(!S.playing)draw();
+});
+
+let animId2=null,animDir=1,animT2=0;
+document.getElementById('btn-play').addEventListener('click',function(){
+  S.playing=!S.playing;this.textContent=S.playing?'⏸ Pause':'▶ Animate';
+  this.classList.toggle('active',S.playing);if(S.playing){animT2=S.t;requestAnimationFrame(anim);}
+});
+function anim(){
+  if(!S.playing)return;animT2+=0.006*animDir;
+  if(animT2>=1){animT2=1;animDir=-1;}if(animT2<=0){animT2=0;animDir=1;}
+  S.t=animT2;document.getElementById('t-slider').value=animT2;document.getElementById('t-val').textContent=animT2.toFixed(2);
+  draw();animId2=requestAnimationFrame(anim);
+}
+document.getElementById('btn-reset').addEventListener('click',()=>{
+  S.playing=false;cancelAnimationFrame(animId2);
+  document.getElementById('btn-play').textContent='▶ Animate';document.getElementById('btn-play').classList.remove('active');
+  S.t=1;document.getElementById('t-slider').value=1;document.getElementById('t-val').textContent='1.00';draw();
+});
+document.querySelectorAll('[data-mode]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');S.mode=btn.dataset.mode;draw();
+  });
+});
+document.querySelectorAll('.preset-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.getElementById('inp-u').value=btn.dataset.u;document.getElementById('inp-vp').value=btn.dataset.vp;
+    document.getElementById('inp-a').value=btn.dataset.a;document.getElementById('inp-b').value=btn.dataset.b;applyFn();
+  });
+});
+const ro=new ResizeObserver(()=>{if(S.uFn)draw();});
+ro.observe(document.getElementById('cwrap'));
+applyFn();
+</script>
+{% endblock %}
