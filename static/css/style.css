@@ -849,3 +849,176 @@ footer {
   .zoom-fab { display: none; }
   .steps-hint { display: none; }
 }
+
+/* ── Guided learning layer ─────────────────────────────────────────────── */
+.lesson-launch {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid rgba(20,108,90,.25);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  font: 650 .72rem/1 Inter, sans-serif;
+  cursor: pointer;
+  z-index: 30;
+}
+.lesson-launch:hover { background: var(--accent-glow); border-color: var(--accent); }
+.lesson-launch-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: .67rem;
+}
+body > header { position: relative; }
+
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(12, 22, 20, .72);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+.tour-backdrop.is-open { opacity: 1; }
+.tour-focus {
+  position: relative !important;
+  z-index: 10001 !important;
+  isolation: isolate;
+  background-color: var(--surface) !important;
+  border-radius: 14px;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.96), 0 0 0 8px rgba(60,190,155,.8), 0 16px 60px rgba(0,0,0,.3) !important;
+}
+.tour-card {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(14px);
+  z-index: 10003;
+  width: min(560px, calc(100vw - 32px));
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 18px;
+  background: #fcfbf8;
+  color: #182522;
+  padding: 18px;
+  box-shadow: 0 26px 90px rgba(0,0,0,.35);
+  opacity: 0;
+  transition: opacity .22s ease, transform .22s ease;
+}
+.tour-card.is-open { opacity: 1; transform: translateX(-50%) translateY(0); }
+.tour-topline { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.tour-kicker { color:#146c5a; font-size:.64rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+.tour-count { margin-left:auto; color:#7d8885; font-size:.68rem; font-variant-numeric:tabular-nums; }
+.tour-title { margin:0 0 7px; font-size:1.1rem; line-height:1.2; letter-spacing:-.025em; }
+.tour-copy { color:#52615d; font-size:.82rem; line-height:1.65; }
+.tour-math {
+  margin-top:10px;
+  padding:9px 11px;
+  border-left:3px solid #146c5a;
+  background:#eeece6;
+  overflow-x:auto;
+  color:#182522;
+}
+.tour-math .katex { font-size:.98em !important; }
+.tour-progress { display:flex; gap:5px; margin:14px 0 12px; }
+.tour-dot { height:4px; flex:1; border-radius:999px; background:#d9d6ce; }
+.tour-dot.is-done { background:#146c5a; }
+.tour-actions { display:flex; align-items:center; gap:7px; }
+.tour-btn {
+  min-height:34px;
+  padding:7px 12px;
+  border:1px solid #d9d6ce;
+  border-radius:9px;
+  background:#f6f4ef;
+  color:#182522;
+  font:650 .74rem Inter, sans-serif;
+  cursor:pointer;
+}
+.tour-btn:hover { background:#eeece6; }
+.tour-btn-primary { margin-left:auto; border-color:#0f594a; background:#0f594a; color:#fff; }
+.tour-btn-primary:hover { background:#146c5a; }
+.tour-btn:disabled { opacity:.42; cursor:not-allowed; }
+
+/* A sequential equation player replaces the answer-dump feeling. */
+.steps-head { flex-wrap: wrap; }
+.equation-player {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  width:100%;
+  padding-top:8px;
+  border-top:1px solid var(--border-soft);
+}
+.equation-player button {
+  min-height:31px;
+  padding:5px 10px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--bg);
+  color:var(--text-2);
+  font:650 .7rem Inter, sans-serif;
+  cursor:pointer;
+}
+.equation-player button:hover { background:var(--accent-glow); color:var(--accent); }
+.equation-player button:disabled { opacity:.38; cursor:not-allowed; }
+.equation-player .eq-next { margin-left:auto; background:var(--accent-dim); border-color:var(--accent-dim); color:#fff; }
+.equation-player-status { color:var(--text-3); font-size:.67rem; font-variant-numeric:tabular-nums; }
+.steps-panel.is-sequential .step-item { display:none; }
+.steps-panel.is-sequential .step-item.is-revealed { display:grid; animation:step-in .24s ease both; }
+.steps-panel.is-sequential .step-item.is-current {
+  background:var(--accent-glow);
+  box-shadow:inset 3px 0 0 var(--accent);
+}
+@keyframes step-in { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:none; } }
+.step-why {
+  grid-column:2 / -1;
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  margin-top:3px;
+  color:var(--text-3);
+  font-size:.68rem;
+  line-height:1.45;
+}
+.step-why::before { content:'→'; color:var(--accent); font-weight:800; }
+
+.geometry-badge {
+  position:absolute;
+  top:10px;
+  left:10px;
+  z-index:10;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 8px;
+  border:1px solid rgba(217,214,206,.88);
+  border-radius:999px;
+  background:rgba(252,251,248,.9);
+  backdrop-filter:blur(8px);
+  color:var(--text-2);
+  font-size:.64rem;
+  font-weight:650;
+  pointer-events:none;
+}
+.geometry-badge::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+
+@media (max-width: 700px) {
+  .lesson-launch { position:static; margin:8px auto 0; }
+  .tour-card { bottom:10px; padding:15px; }
+  .tour-copy { font-size:.77rem; }
+  .tour-actions { flex-wrap:wrap; }
+  .tour-btn-primary { margin-left:0; }
+  .equation-player { flex-wrap:wrap; }
+  .equation-player .eq-next { margin-left:0; }
+}

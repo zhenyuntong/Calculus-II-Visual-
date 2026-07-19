@@ -7,8 +7,9 @@
 body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
 .layout{display:grid;grid-template-columns:260px 1fr;gap:10px;flex:1;min-height:0;}
 .right-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
-#c3d{width:100%;height:100%;display:block;border-radius:var(--r);background:#fafafa;}
+#c3d{width:100%;height:100%;display:block;border-radius:var(--r);background:#07151c;}
 .canvas-wrap{flex:1;min-height:320px;position:relative;overflow:hidden;border-radius:var(--r);border:1px solid var(--border);}
+.canvas-wrap>canvas{position:absolute;inset:0;z-index:1;}
 .view-tabs{display:flex;gap:4px;}
 .toggle-stack{display:flex;flex-direction:column;gap:7px;}
 .info-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
@@ -17,8 +18,13 @@ body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
 .mini-stat strong{display:block;font-family:'JetBrains Mono',monospace;font-size:.84rem;color:var(--text-2);margin-top:2px;}
 .formula-mini{border:1px solid var(--border);background:var(--surface);border-radius:var(--r);padding:9px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
 .formula-mini .tag{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);}
+.direction-key{position:absolute;right:12px;top:12px;z-index:50;width:min(255px,calc(100% - 24px));padding:9px 11px;border:1px solid rgba(255,255,255,.28);border-radius:10px;background:#0a1d26;color:#eef8f5;box-shadow:0 10px 35px rgba(0,0,0,.35);pointer-events:none;}
+.direction-key-title{margin-bottom:5px;color:#b6c9c4;font-size:.58rem;font-weight:800;letter-spacing:.11em;text-transform:uppercase;}
+.direction-item{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:6px;min-height:20px;font-size:.65rem;}
+.direction-item i{width:8px;height:8px;border-radius:50%;background:var(--dir);box-shadow:0 0 0 2px color-mix(in srgb,var(--dir) 25%,transparent);}
+.direction-item span{font-weight:650;}.direction-item small{color:#b6c9c4;font-size:.59rem;}
 @media(max-width:860px){.layout{grid-template-columns:1fr;}}
-@media(max-width:640px){.info-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:640px){.info-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.direction-key{right:8px;top:8px;width:220px}.direction-item small{display:none}}
 </style>
 {% endblock %}
 
@@ -91,6 +97,13 @@ body{min-height:100vh;display:flex;flex-direction:column;padding:14px;gap:10px;}
     <div class="canvas-wrap" id="cwrap">
       <canvas id="c3d"></canvas>
       <canvas id="chm" style="display:none;width:100%;height:100%;border-radius:var(--r);"></canvas>
+      <div class="direction-key" aria-label="Direction vectors">
+        <div class="direction-key-title">Directions at the orange probe</div>
+        <div class="direction-item" style="--dir:#22c55e"><i></i><span>Gradient ∇f</span><small>fastest increase</small></div>
+        <div class="direction-item" style="--dir:#22d3ee"><i></i><span>Unit gradient ĝ</span><small>length = 1</small></div>
+        <div class="direction-item" style="--dir:#f43f5e"><i></i><span>−ĝ</span><small>maximum decrease</small></div>
+        <div class="direction-item" style="--dir:#c084fc"><i></i><span>Level direction</span><small>change = 0</small></div>
+      </div>
     </div>
     <div class="info-grid">
       <div class="mini-stat"><span>f(x₀,y₀)</span><strong id="stat-f0">—</strong></div>
@@ -128,7 +141,7 @@ document.querySelectorAll('.sym-bar').forEach(bar=>{
 
 const H=1e-4;
 let fC=null,x0=0.8,y0=0.5,currentView='3d';
-let renderer,scene,camera,controls_,surfaceMesh,planeMesh,arrowGroup,contourGroup,probeGroup;
+let renderer,scene,camera,controls_,surfaceMesh,surfaceWire,planeMesh,arrowGroup,probeVectorGroup,contourGroup,probeGroup;
 const DPR=window.devicePixelRatio||1;
 function texExpr(raw){return window.mathToLatex?window.mathToLatex(raw):raw.replace(/\*/g,'\\cdot ');}
 
@@ -146,13 +159,15 @@ function initThree(){
   const c=document.getElementById('c3d');
   renderer=new THREE.WebGLRenderer({canvas:c,antialias:true,alpha:true});
   renderer.setPixelRatio(DPR);renderer.setSize(wrap.clientWidth,wrap.clientHeight);
-  renderer.setClearColor(0xfafafa,1);
-  scene=new THREE.Scene();scene.background=new THREE.Color(0xfafafa);
+  renderer.setClearColor(0x07151c,1);
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x07151c);
   camera=new THREE.PerspectiveCamera(45,wrap.clientWidth/wrap.clientHeight,0.01,100);
   camera.position.set(4,3,4);camera.lookAt(0,0,0);
-  const amb=new THREE.AmbientLight(0xffffff,0.7);scene.add(amb);
-  const dir=new THREE.DirectionalLight(0xffffff,0.8);dir.position.set(5,8,5);scene.add(dir);
-  const axes=new THREE.AxesHelper(2.5);scene.add(axes);
+  const amb=new THREE.HemisphereLight(0x8be9ff,0x07151c,0.55);scene.add(amb);
+  const dir=new THREE.DirectionalLight(0xdbeafe,0.72);dir.position.set(5,8,5);scene.add(dir);
+  const rim=new THREE.DirectionalLight(0xa855f7,0.5);rim.position.set(-5,3,-4);scene.add(rim);
+  const axes=new THREE.AxesHelper(2.7);scene.add(axes);
+  const grid=new THREE.GridHelper(6,12,0x3b7180,0x183744);grid.position.y=-2.05;scene.add(grid);
   // simple orbit
   let down=false,lx=0,ly=0;
   let sph={theta:Math.atan2(4,4),phi:Math.atan2(Math.sqrt(32),3),r:6.4};
@@ -171,6 +186,7 @@ function initThree(){
   c.addEventListener('mouseup',()=>down=false);
   c.addEventListener('wheel',e=>{sph.r=Math.max(1,Math.min(20,sph.r+e.deltaY*0.01));updateCam();e.preventDefault();},{passive:false});
   arrowGroup=new THREE.Group();scene.add(arrowGroup);
+  probeVectorGroup=new THREE.Group();scene.add(probeVectorGroup);
   contourGroup=new THREE.Group();scene.add(contourGroup);
   probeGroup=new THREE.Group();scene.add(probeGroup);
   function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}
@@ -178,8 +194,9 @@ function initThree(){
 }
 function buildSurface(){
   if(surfaceMesh){scene.remove(surfaceMesh);surfaceMesh.geometry.dispose();surfaceMesh.material.dispose();}
+  if(surfaceWire){scene.remove(surfaceWire);surfaceWire.geometry.dispose();surfaceWire.material.dispose();}
   if(planeMesh){scene.remove(planeMesh);planeMesh.geometry.dispose();planeMesh.material.dispose();}
-  arrowGroup.clear();contourGroup.clear();probeGroup.clear();
+  arrowGroup.clear();probeVectorGroup.clear();contourGroup.clear();probeGroup.clear();
   const N=60,range=3;
   const geo=new THREE.BufferGeometry();
   const verts=[],norms=[],colors=[];
@@ -211,15 +228,18 @@ function buildSurface(){
         const nl=Math.sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])||1;
         norms.push(n[0]/nl,n[1]/nl,n[2]/nl,...Array(6).fill(0).map((_,k)=>n[k%3]/nl));
         [[va],[vb],[vc]].forEach(([v])=>{
-          const t=(v[1]+2)/4;colors.push(...hslToRgb(0.6-0.6*t,0.7,0.5+0.2*t));
+          const t=Math.max(0,Math.min(1,(v[1]+2)/4));
+          colors.push(...hslToRgb(0.52+0.24*t,0.86,0.38+0.16*t));
         });
       });
     }
   }
   geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
   geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-  const mat=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
+  geo.computeVertexNormals();
+  const mat=new THREE.MeshPhongMaterial({vertexColors:true,side:THREE.DoubleSide,shininess:26,specular:0x60a5fa,emissive:0x071d2b,emissiveIntensity:0.2});
   surfaceMesh=new THREE.Mesh(geo,mat);scene.add(surfaceMesh);
+  surfaceWire=new THREE.Mesh(geo.clone(),new THREE.MeshBasicMaterial({color:0xd4fbff,wireframe:true,transparent:true,opacity:0.09}));scene.add(surfaceWire);
   updateProbe(zMid,zRange);
   if(document.getElementById('chk-contours').checked)buildContours(norm,zMid,zRange,range,N,grid);
   if(document.getElementById('chk-grad').checked)buildArrows(norm,zMid,zRange,range);
@@ -244,13 +264,29 @@ function updateProbe(zMid,zRange){
     const {fx:gx,fy:gy}=gradF(fC,x0,y0);
     const normGx=gx/zRange*2,normGy=gy/zRange*2;
     const pGeo=new THREE.PlaneGeometry(2,2);
-    const pMat=new THREE.MeshLambertMaterial({color:0x3b82f6,opacity:0.3,transparent:true,side:THREE.DoubleSide});
+    const pMat=new THREE.MeshLambertMaterial({color:0x38bdf8,opacity:0.38,transparent:true,side:THREE.DoubleSide,depthWrite:false});
     const pMesh=new THREE.Mesh(pGeo,pMat);
     const n=new THREE.Vector3(-normGx,1,-normGy).normalize();
     const up=new THREE.Vector3(0,1,0);
     const quat=new THREE.Quaternion().setFromUnitVectors(up,n);
     pMesh.quaternion.copy(quat);pMesh.position.set(x0,zn,y0);planeMesh=pMesh;scene.add(planeMesh);
   }
+  if(document.getElementById('chk-grad').checked)buildProbeDirections3D(zn,zRange);
+}
+function buildProbeDirections3D(zn,zRange){
+  const {fx,fy}=gradF(fC,x0,y0),mag=Math.hypot(fx,fy);if(!isFinite(mag)||mag<1e-8)return;
+  const ux=fx/mag,uy=fy/mag,verticalScale=2/zRange;
+  const origin=new THREE.Vector3(x0,zn+0.08,y0);
+  const add=(dx,dy,derivative,length,color,offset=0)=>{
+    const normal=new THREE.Vector3(-uy,0,ux).multiplyScalar(offset);
+    const start=origin.clone().add(normal);
+    const direction=new THREE.Vector3(dx,derivative*verticalScale,dy).normalize();
+    probeVectorGroup.add(new THREE.ArrowHelper(direction,start,length,color,Math.min(.18,length*.3),Math.min(.11,length*.18)));
+  };
+  add(fx,fy,mag*mag,Math.min(1.65,.65+.22*mag),0x22c55e,0);
+  add(ux,uy,mag,.9,0x22d3ee,.11);
+  add(-ux,-uy,-mag,.9,0xf43f5e,-.08);
+  add(-uy,ux,0,.9,0xc084fc,.04);
 }
 function buildSlices(norm,zMid,zRange,range){
   const mkLine=(pts,col)=>{
@@ -370,7 +406,24 @@ function drawHeatmap(){
     ctx.fillText(`probe (${x0.toFixed(2)}, ${y0.toFixed(2)})`,ppx(x0)+9*DPR,ppy(y0)-9*DPR);
     ctx.fillText(`∇f=(${gr.fx.toFixed(2)}, ${gr.fy.toFixed(2)})`,ppx(x0)+9*DPR,ppy(y0)+7*DPR);
   }
+  if(document.getElementById('chk-grad').checked)drawProbeDirections2D(ctx,ppx,ppy,W,H_,pad);
   ctx.fillStyle='#111827';ctx.font=`${Math.round(10*DPR)}px system-ui`;ctx.textAlign='left';ctx.fillText('x',W-pad+4,H_-pad);ctx.fillText('y',pad,pad-4);
+}
+function drawProbeDirections2D(ctx,ppx,ppy,W,H_,pad){
+  const {fx,fy}=gradF(fC,x0,y0),mag=Math.hypot(fx,fy);if(!isFinite(mag)||mag<1e-8)return;
+  const ux=fx/mag,uy=fy/mag,cx=ppx(x0),cy=ppy(y0),unit=72*DPR;
+  const draw=(dx,dy,length,color,label,ox=0,oy=0)=>{
+    const x1=cx+ox*DPR,y1=cy+oy*DPR,x2=x1+dx*length,y2=y1-dy*length;
+    ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2.6*DPR;drawArrow2D(ctx,x1,y1,x2,y2);
+    ctx.font=`bold ${Math.round(10*DPR)}px system-ui`;ctx.textAlign='left';ctx.textBaseline='middle';
+    const tx=x2+6*DPR,ty=y2,tw=ctx.measureText(label).width+10*DPR;
+    ctx.fillStyle='rgba(5,18,25,.88)';ctx.fillRect(tx-4*DPR,ty-9*DPR,tw,18*DPR);
+    ctx.fillStyle=color;ctx.fillText(label,tx,ty);ctx.restore();
+  };
+  draw(ux,uy,Math.min(120*DPR,(58+18*mag)*DPR),'#22c55e','∇f');
+  draw(ux,uy,unit,'#22d3ee','ĝ (unit)',-uy*10,ux*10);
+  draw(-ux,-uy,unit,'#f43f5e','−ĝ: max decrease');
+  draw(-uy,ux,unit,'#c084fc','change = 0');
 }
 function contourLevels(vals){if(!vals.length)return[];const mn=Math.min(...vals),mx=Math.max(...vals);return Array.from({length:8},(_,i)=>mn+(mx-mn)*(i+1)/9);}
 function drawContour2D(ctx,zs,level,N,range,ppx,ppy,color,lw){

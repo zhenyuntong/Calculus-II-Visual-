@@ -34,6 +34,13 @@ def compute_steps(g_str: str, f_str: str, a: float, b: float) -> list[dict]:
             int_fu_val = None
 
         try:
+            antiderivative = sp.integrate(f, u)
+            anti_tex = sp.latex(sp.simplify(antiderivative))
+        except Exception:
+            antiderivative = None
+            anti_tex = r"\text{(use a numerical antiderivative)}"
+
+        try:
             int_hx = sp.integrate(h, (x, a, b))
             int_hx_tex = sp.latex(int_hx)
         except Exception:
@@ -59,8 +66,8 @@ def compute_steps(g_str: str, f_str: str, a: float, b: float) -> list[dict]:
             },
             {
                 "color": C["green"],
-                "latex": rf"h(x) = f(g(x))\cdot g'(x) = {h_tex}",
-                "desc":  "Integrand in x-domain (must contain g'(x) for sub to work)",
+                "latex": rf"\int_{{{a:.3f}}}^{{{b:.3f}}} f(g(x))\,g'(x)\,dx = \int_{{{a:.3f}}}^{{{b:.3f}}} {h_tex}\,dx",
+                "desc":  "Identify the complete x-integrand before replacing any symbols",
                 "val":   "",
             },
             {
@@ -77,9 +84,23 @@ def compute_steps(g_str: str, f_str: str, a: float, b: float) -> list[dict]:
                 "latex": (
                     rf"\int_{{{a:.3f}}}^{{{b:.3f}}} {h_tex}\,dx"
                     rf"\;=\; \int_{{{ua:.4f}}}^{{{ub:.4f}}} {f_tex}\,du"
-                    rf"\;=\; {int_fu_tex}"
                 ),
-                "desc":  "Substitution transforms x-integral into a simpler u-integral",
+                "desc":  "Replace g(x) by u, replace g′(x)dx by du, and use the transformed bounds",
+                "val":   "",
+            },
+            {
+                "color": C["blue"],
+                "latex": rf"\int {f_tex}\,du = {anti_tex}",
+                "desc":  "Find the antiderivative in the simpler u-coordinate",
+                "val":   "",
+            },
+            {
+                "color": C["red"],
+                "latex": (
+                    rf"\left[{anti_tex}\right]_{{{ua:.4f}}}^{{{ub:.4f}}}"
+                    rf"= {int_fu_tex}"
+                ),
+                "desc":  "Evaluate upper bound minus lower bound only after the substitution is complete",
                 "val":   f"{int_fu_val:.6f}" if int_fu_val is not None else "—",
             },
         ]

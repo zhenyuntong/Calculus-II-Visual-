@@ -1,159 +1,99 @@
 {% extends 'base.html' %}
-{% block title %}Math Visualizer{% endblock %}
+{% block title %}Calculus Modules{% endblock %}
 
 {% block extra_head %}
 <style>
-body { min-height: 100vh; padding: 40px 24px; }
-header { text-align: center; margin-bottom: 40px; }
-header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.04em; margin-bottom: 8px; color: var(--text); }
-header p  { color: var(--text-2); font-size: 0.9rem; }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 22px;
-  text-decoration: none;
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
-  position: relative;
-  overflow: hidden;
-}
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 3px;
-  background: var(--accent-color);
-  border-radius: 12px 12px 0 0;
-  opacity: 0.85;
-}
-.card:hover {
-  border-color: var(--accent-color);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.07);
-}
-.card-tag {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--accent-color);
-}
-.card h2 { font-size: 1.0rem; font-weight: 600; letter-spacing: -0.02em; }
-.card-formula {
-  background: rgba(0,0,0,0.03);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  min-height: 2.4em;
-  display: flex;
-  align-items: center;
-  overflow-x: auto;
-}
-.card-formula .katex { font-size: 0.82em !important; }
-.card p { font-size: 0.78rem; color: var(--text-2); line-height: 1.55; }
-.card-arrow { margin-top: auto; padding-top: 4px; font-size: 0.78rem; color: var(--accent-color); font-weight: 500; }
-footer { text-align: center; margin-top: 48px; color: var(--text-3); font-size: 0.75rem; }
+body{min-height:100vh;padding:20px 22px 42px;background:var(--bg);}
+.library-nav{max-width:1120px;margin:0 auto 30px;display:flex;align-items:center;justify-content:space-between;gap:14px;}
+.brand{display:flex;align-items:center;gap:9px;color:var(--text);font-size:.8rem;font-weight:750;}
+.brand-mark{width:31px;height:31px;border-radius:9px;display:grid;place-items:center;background:var(--text);color:var(--bg);font:1rem Georgia,serif;}
+.view-switch{display:flex;align-items:center;gap:4px;padding:3px;border:1px solid var(--border);border-radius:10px;background:var(--surface);}
+.view-btn{display:inline-flex;align-items:center;gap:6px;min-height:31px;padding:5px 9px;border:0;border-radius:7px;background:transparent;color:var(--text-3);font:650 .68rem Inter,sans-serif;cursor:pointer;}
+.view-btn[aria-pressed="true"]{background:var(--text);color:var(--bg);}
+.view-icon{font-size:.82rem;line-height:1;}
+.module-library{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:34px;}
+.module-group{display:flex;flex-direction:column;gap:12px;}
+.group-head{display:flex;align-items:center;gap:10px;}
+.group-head h2{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--text-2);white-space:nowrap;}
+.group-head::after{content:'';height:1px;flex:1;background:var(--border);}
+.module-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:13px;align-items:stretch;}
+.module-card{--module-accent:var(--accent);position:relative;min-height:276px;padding:18px;display:flex;flex-direction:column;gap:11px;overflow:hidden;border:1px solid var(--border);border-radius:17px;background:var(--surface);color:var(--text);text-decoration:none;transition:transform .18s,border-color .18s,box-shadow .18s;}
+.module-card::before{content:'';position:absolute;inset:0 0 auto;height:4px;background:var(--module-accent);}
+.module-card:hover{transform:translateY(-3px);border-color:var(--module-accent);box-shadow:0 15px 38px rgba(24,37,34,.09);}
+.module-number{color:var(--module-accent);font:750 .63rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;}
+.module-glyph{width:100%;height:78px;color:var(--module-accent);margin:2px 0 3px;}
+.module-glyph *{vector-effect:non-scaling-stroke;}
+.module-card h3{font-size:.95rem;line-height:1.25;font-weight:750;letter-spacing:-.025em;}
+.module-formula{min-height:38px;display:flex;align-items:center;padding-top:8px;border-top:1px solid var(--border-soft);overflow:hidden;}
+.module-formula .katex{font-size:.76em!important;}
+.module-desc{color:var(--text-2);font-size:.73rem;line-height:1.5;}
+.module-open{margin-top:auto;color:var(--module-accent);font-size:.69rem;font-weight:750;}
+.module-open::after{content:'  →';}
+
+body.list-view .module-library{gap:28px;}
+body.list-view .module-grid{grid-template-columns:1fr;gap:7px;}
+body.list-view .module-card{min-height:0;padding:13px 15px;display:grid;grid-template-columns:42px minmax(160px,.72fr) minmax(190px,1fr) minmax(220px,1.25fr) auto;align-items:center;gap:13px;border-radius:12px;}
+body.list-view .module-card::before{inset:0 auto 0 0;width:4px;height:auto;}
+body.list-view .module-number{grid-column:1;}
+body.list-view .module-glyph{display:none;}
+body.list-view .module-card h3{grid-column:2;}
+body.list-view .module-formula{grid-column:3;min-height:0;padding:0;border:0;}
+body.list-view .module-desc{grid-column:4;}
+body.list-view .module-open{grid-column:5;margin:0;white-space:nowrap;}
+
+footer{max-width:1120px;margin:36px auto 0;color:var(--text-3);font-size:.68rem;}
+@media(max-width:760px){body.list-view .module-card{grid-template-columns:34px minmax(0,1fr) auto;}body.list-view .module-card h3{grid-column:2}.module-formula,body.list-view .module-desc{display:none}body.list-view .module-open{grid-column:3}.module-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}.module-card{min-height:250px}}
+@media(max-width:480px){body{padding:16px 13px 30px}.library-nav{margin-bottom:24px}.view-btn span:last-child{display:none}.module-grid{grid-template-columns:1fr 1fr;gap:9px}.module-card{min-height:224px;padding:14px}.module-glyph{height:58px}.module-desc{display:none}.module-formula .katex{font-size:.67em!important}.module-library{gap:28px}}
 </style>
 {% endblock %}
 
 {% block body %}
-<header>
-  <h1>Math Visualizer</h1>
-  <p>Interactive explorations of core calculus and analysis topics</p>
-</header>
+<nav class="library-nav" aria-label="Module library">
+  <div class="brand"><span class="brand-mark">∫</span><span>Calculus modules</span></div>
+  <div class="view-switch" aria-label="Choose module layout">
+    <button class="view-btn" id="grid-view" type="button" aria-pressed="true"><span class="view-icon" aria-hidden="true">▦</span><span>Grid</span></button>
+    <button class="view-btn" id="list-view" type="button" aria-pressed="false"><span class="view-icon" aria-hidden="true">☷</span><span>List</span></button>
+  </div>
+</nav>
 
-<div class="grid" id="grid"></div>
-
-<footer>Click any card to open the interactive visualizer</footer>
+<main class="module-library" id="library"></main>
+<footer>Open a module to start.</footer>
 
 <script>
-const rk = (el, tex) => el && katex.render(tex, el, { throwOnError: false, displayMode: false });
-
-const topics = [
-  {
-    href: '/riemann-sum',
-    accent: '#10a37f',
-    tag: 'Integration',
-    title: 'Riemann Sum',
-    formula: String.raw`\displaystyle\int_a^b f(x)\,dx \;\approx\; \sum_{i=1}^{n} f(x_i^*)\,\Delta x`,
-    desc: 'Approximate definite integrals with Left, Right, Midpoint, or Trapezoid rectangles. Watch the error shrink as n → ∞.',
-  },
-  {
-    href: '/partial-derivatives',
-    accent: '#3b82f6',
-    tag: 'Multivariable Calculus',
-    title: 'Partial Derivatives & Gradient',
-    formula: String.raw`\nabla f = \left(\dfrac{\partial f}{\partial x},\;\dfrac{\partial f}{\partial y}\right)`,
-    desc: 'Visualize a 2D function as a 3D surface, explore gradient field arrows, and trace gradient ascent paths.',
-  },
-  {
-    href: '/integration-by-parts',
-    accent: '#7c3aed',
-    tag: 'Integration Technique',
-    title: 'Integration by Parts',
-    formula: String.raw`\int u\,dv \;=\; uv \;-\; \int v\,du`,
-    desc: 'See the geometric interpretation in the u–v plane. The rectangle area splits into two complementary regions.',
-  },
-  {
-    href: '/substitution',
-    accent: '#d97706',
-    tag: 'Integration Technique',
-    title: 'u-Substitution',
-    formula: String.raw`\int f(g(x))\,g'(x)\,dx \;=\; \int f(u)\,du`,
-    desc: 'Watch how substituting u = g(x) transforms the original integral into a simpler one, strip by strip.',
-  },
-  {
-    href: '/lagrange-multipliers',
-    accent: '#ef4444',
-    tag: 'Optimization',
-    title: 'Lagrange Multipliers',
-    formula: String.raw`\nabla f \;=\; \lambda\,\nabla g \quad\text{s.t.}\quad g = c`,
-    desc: 'Optimize a function on a constraint curve. See level sets, gradient vectors, and the λ alignment condition.',
-  },
-  {
-    href: '/linear-ode',
-    accent: '#0891b2',
-    tag: 'Differential Equations',
-    title: 'Linear ODE & Integrating Factor',
-    formula: String.raw`y' + P(x)\,y = Q(x), \quad \mu = e^{\int P\,dx}`,
-    desc: 'Solve first-order linear ODEs with the integrating factor method. Visualize the solution family.',
-  },
-  {
-    href: '/leibniz',
-    accent: '#6b7280',
-    tag: 'Advanced Integration',
-    title: 'Leibniz Integral Rule',
-    formula: String.raw`\frac{d}{dt}\!\int_{a(t)}^{b(t)}\! f\,dx \;=\; f(b)\,b' - f(a)\,a' + \int_{\!a}^{b}\!\frac{\partial f}{\partial t}\,dx`,
-    desc: 'Differentiate under the integral sign with moving bounds. Decompose d/dt I(t) into its three components.',
-  },
+const rk=(el,tex)=>el&&katex.render(tex,el,{throwOnError:false,displayMode:false});
+const groups=[
+  {title:'Integration',topics:[
+    {href:'/riemann-sum',accent:'#0f8f70',title:'Riemann Sum',formula:String.raw`\int_a^b f(x)\,dx\approx\sum f(x_i^*)\Delta x`,desc:'Build area from thinner and thinner strips.',glyph:'<rect x="9" y="41" width="11" height="24"/><rect x="23" y="28" width="11" height="37"/><rect x="37" y="17" width="11" height="48"/><rect x="51" y="30" width="11" height="35"/><path d="M5 50 C20 40 28 12 45 18 S62 40 73 23"/>'},
+    {href:'/substitution',accent:'#d97706',title:'u-Substitution',formula:String.raw`\int f(g(x))g'(x)\,dx=\int f(u)\,du`,desc:'Follow the same area strip in x-space and u-space.',glyph:'<path d="M4 52 C17 17 31 17 38 52 S61 75 75 24"/><line x1="27" y1="21" x2="27" y2="64"/><line x1="54" y1="26" x2="54" y2="64"/><path d="M29 10 C39 3 48 3 57 10"/><polyline points="52,6 57,10 52,14"/>'},
+    {href:'/integration-by-parts',accent:'#7c3aed',title:'Integration by Parts',formula:String.raw`\int u\,dv=uv-\int v\,du`,desc:'Split a boundary rectangle into complementary areas.',glyph:'<rect x="10" y="10" width="58" height="55"/><path d="M10 57 C27 55 28 27 44 31 S57 12 68 10"/><path d="M10 57 L10 65 L68 65 L68 10"/>'},
+    {href:'/leibniz',accent:'#4f6470',title:'Leibniz Integral Rule',formula:String.raw`\frac d{dt}\int_{a(t)}^{b(t)}f(x,t)\,dx`,desc:'Track moving boundaries and a changing integrand.',glyph:'<path d="M9 50 C22 12 50 15 69 43"/><path d="M17 50 L17 65 L62 65 L62 48"/><line x1="17" y1="16" x2="17" y2="68"/><line x1="62" y1="22" x2="62" y2="68"/>'}
+  ]},
+  {title:'Multivariable calculus',topics:[
+    {href:'/partial-derivatives',accent:'#2563eb',title:'Partial Derivatives & Gradient',formula:String.raw`\nabla f=(f_x,f_y)`,desc:'Slice a surface and find its steepest direction.',glyph:'<path d="M4 53 C19 25 32 24 42 46 S63 63 76 22"/><path d="M4 65 C19 38 32 37 42 58 S63 74 76 35"/><line x1="42" y1="46" x2="63" y2="18"/><polyline points="56,20 63,18 62,26"/>'},
+    {href:'/lagrange-multipliers',accent:'#dc4a4a',title:'Lagrange Multipliers',formula:String.raw`\nabla f=\lambda\nabla g,\quad g=c`,desc:'Find where an objective contour touches a constraint.',glyph:'<ellipse cx="40" cy="40" rx="32" ry="20"/><ellipse cx="40" cy="40" rx="20" ry="12"/><path d="M8 66 C24 51 35 57 47 38 S65 25 75 18"/><circle cx="47" cy="38" r="4"/>'}
+  ]},
+  {title:'Differential equations',topics:[
+    {href:'/linear-ode',accent:'#0788a0',title:'Linear ODE & Integrating Factor',formula:String.raw`y'+P(x)y=Q(x)`,desc:'Connect the slope field, solution curve, and integrating factor.',glyph:'<path d="M4 58 C20 55 22 20 40 31 S60 58 76 12"/><path d="M4 69 C20 66 22 31 40 42 S60 69 76 23"/><line x1="13" y1="25" x2="24" y2="19"/><line x1="47" y1="19" x2="58" y2="28"/>'}
+  ]}
 ];
 
-const grid = document.getElementById('grid');
-topics.forEach(t => {
-  const card = document.createElement('a');
-  card.className = 'card';
-  card.href = t.href;
-  card.style.setProperty('--accent-color', t.accent);
-  const fid = 'f-' + t.href.replace('/', '');
-  card.innerHTML = `
-    <span class="card-tag">${t.tag}</span>
-    <h2>${t.title}</h2>
-    <div class="card-formula" id="${fid}"></div>
-    <p>${t.desc}</p>
-    <span class="card-arrow">Open →</span>
-  `;
-  grid.appendChild(card);
-  rk(card.querySelector('.card-formula'), t.formula);
+const library=document.getElementById('library');let moduleNumber=1;
+groups.forEach(group=>{
+  const section=document.createElement('section');section.className='module-group';
+  section.innerHTML=`<div class="group-head"><h2>${group.title}</h2></div><div class="module-grid"></div>`;
+  const grid=section.querySelector('.module-grid');
+  group.topics.forEach(topic=>{
+    const card=document.createElement('a');card.className='module-card';card.href=topic.href;card.style.setProperty('--module-accent',topic.accent);
+    card.innerHTML=`<span class="module-number">${String(moduleNumber++).padStart(2,'0')}</span><svg class="module-glyph" viewBox="0 0 80 78" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${topic.glyph}</svg><h3>${topic.title}</h3><div class="module-formula"></div><p class="module-desc">${topic.desc}</p><span class="module-open">Open</span>`;
+    grid.appendChild(card);rk(card.querySelector('.module-formula'),topic.formula);
+  });
+  library.appendChild(section);
 });
+
+const gridBtn=document.getElementById('grid-view'),listBtn=document.getElementById('list-view');
+function setView(view){const list=view==='list';document.body.classList.toggle('list-view',list);gridBtn.setAttribute('aria-pressed',String(!list));listBtn.setAttribute('aria-pressed',String(list));localStorage.setItem('moduleView',view);}
+gridBtn.addEventListener('click',()=>setView('grid'));
+listBtn.addEventListener('click',()=>setView('list'));
+setView(localStorage.getItem('moduleView')==='list'?'list':'grid');
 </script>
 {% endblock %}

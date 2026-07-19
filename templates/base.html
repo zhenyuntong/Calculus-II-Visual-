@@ -9,6 +9,22 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script>
+/* Available before page scripts execute. */
+window.mathToLatex = function(s) {
+  if (!s || !s.trim()) return '';
+  return s.trim()
+    .replace(/\*\*/g, '^')
+    .replace(/sqrt\(([^)]+)\)/g, '\\sqrt{$1}')
+    .replace(/abs\(([^)]+)\)/g, '\\left|$1\\right|')
+    .replace(/exp\(([^()]+)\)/g, 'e^{$1}')
+    .replace(/\bsin\b/g, '\\sin').replace(/\bcos\b/g, '\\cos')
+    .replace(/\btan\b/g, '\\tan').replace(/\bln\b/g, '\\ln')
+    .replace(/\blog\b/g, '\\log').replace(/\bpi\b/gi, '\\pi')
+    .replace(/\binf\b/gi, '\\infty')
+    .replace(/\*/g, ' \\cdot ');
+};
+</script>
 {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -391,5 +407,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+<script src="{{ url_for('static', filename='js/learning.js') }}"></script>
 </body>
 </html>

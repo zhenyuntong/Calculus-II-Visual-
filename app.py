@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, render_template, request, jsonify
 from math_engine import riemann, substitution, integration_by_parts, partial_derivatives, lagrange, linear_ode, leibniz
 
@@ -117,4 +119,8 @@ def api_leibniz():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    app.run(
+        debug=os.environ.get("CALCULUS_VISUAL_DEBUG") == "1",
+        host="127.0.0.1",
+        port=5050,
+    )
